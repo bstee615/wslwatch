@@ -173,6 +173,7 @@ func TestWatchdogGetStatus(t *testing.T) {
 
 	assert.NotNil(t, ubuntuStatus, "Ubuntu should appear in status")
 	assert.Equal(t, "healthy", ubuntuStatus.State)
+	assert.False(t, w.states["Ubuntu"].StartedAt.IsZero(), "StartedAt should be set after healthy check")
 	assert.Equal(t, 0, ubuntuStatus.RestartCount)
 	assert.False(t, ubuntuStatus.Exhausted)
 	assert.False(t, ubuntuStatus.InBackoff)
@@ -339,4 +340,88 @@ func TestWatchdogKeepAliveStoppedOnReload(t *testing.T) {
 
 	assert.NotContains(t, w.states, "Ubuntu", "old distro should be removed")
 	assert.Contains(t, w.states, "Debian", "new distro should be added")
+}
+
+// TestWatchdogStatusStartingBeforeCheck verifies status is "starting" before any health check.
+func TestWatchdogStatusStartingBeforeCheck(t *testing.T) {
+	runner := wsl.NewMockRunner()
+	runner.Distros = []wsl.DistroInfo{
+		{Name: "Ubuntu", State: wsl.StateRunning, Version: 2},
+	}
+
+	cfg := testConfig([]config.DistroConfig{
+		{Name: "Ubuntu", Enabled: true},
+	})
+
+	w := New(cfg, runner, testLogger())
+
+	// Before any checkAll, status should be "starting".
+	status := w.GetStatus()
+
+	var ubuntuStatus *DistroStatus
+	for i := range status.Distros {
+		if status.Distros[i].Name == "Ubuntu" {
+			ubuntuStatus = &status.Distros[i]
+			break
+		}
+	}
+
+	assert.NotNil(t, ubuntuStatus)
+	assert.Equal(t, "starting", ubuntuStatus.State)
+	assert.Equal(t, time.Duration(0), ubuntuStatus.Uptime)
+}
+
+// TestWatchdogUptimeResetsAfterRestart verifies uptime resets when a distro is restarted.
+func TestWatchdogUptimeResetsAfterRestart(t *testing.T) {
+	runner := wsl.NewMockRunner()
+	runner.Distros = []wsl.DistroInfo{
+		{Name: "Ubuntu", State: wsl.StateRunning, Version: 2},
+	}
+
+	cfg := testConfig([]config.DistroConfig{
+		{Name: "Ubuntu", Enabled: true},
+	})
+
+	w := New(cfg, runner, testLogger())
+
+	// First healthy check sets StartedAt.
+	w.checkAll()
+	assert.False(t, w.states["Ubuntu"].StartedAt.IsZero(), "StartedAt should be set after healthy check")
+
+	// Simulate distro going unhealthy and triggering restart.
+	runner.Distros = []wsl.DistroInfo{
+		{Name: "Ubuntu", State: wsl.StateStopped, Version: 2},
+	}
+	w.checkAll()
+
+	// After restart, StartedAt should be reset.
+	assert.True(t, w.states["Ubuntu"].StartedAt.IsZero(), "StartedAt should be reset after restart")
+
+	// Status should show "starting" until next healthy check.
+	status := w.GetStatus()
+	var ubuntuStatus *DistroStatus
+	for i := range status.Distros {
+		if status.Distros[i].Name == "Ubuntu" {
+			ubuntuStatus = &status.Distros[i]
+			break
+		}
+	}
+	assert.Equal(t, "starting", ubuntuStatus.State)
+
+	// Distro comes back healthy.
+	runner.Distros = []wsl.DistroInfo{
+		{Name: "Ubuntu", State: wsl.StateRunning, Version: 2},
+	}
+	w.checkAll()
+
+	assert.False(t, w.states["Ubuntu"].StartedAt.IsZero(), "StartedAt should be set after recovery")
+	status = w.GetStatus()
+	for i := range status.Distros {
+		if status.Distros[i].Name == "Ubuntu" {
+			ubuntuStatus = &status.Distros[i]
+			break
+		}
+	}
+	assert.Equal(t, "healthy", ubuntuStatus.State)
+	assert.False(t, w.states["Ubuntu"].StartedAt.IsZero(), "StartedAt should be set after recovery")
 }

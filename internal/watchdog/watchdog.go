@@ -214,6 +214,8 @@ func (w *Watchdog) GetStatus() Status {
 			statusState = "paused"
 		case state.tracker.InBackoff():
 			statusState = "unhealthy"
+		case state.StartedAt.IsZero():
+			statusState = "starting"
 		default:
 			statusState = "healthy"
 		}
@@ -437,11 +439,14 @@ func (w *Watchdog) queryDistroHealth(ctx context.Context, name string, distros [
 func (w *Watchdog) restartDistro(ctx context.Context, distro config.DistroConfig) {
 	w.logger.Info("restarting distro", "distro", distro.Name)
 
-	// Stop existing keep-alive before terminating.
+	// Stop existing keep-alive and reset uptime before terminating.
 	w.mu.Lock()
-	if state, ok := w.states[distro.Name]; ok && state.keepAlive != nil {
-		state.keepAlive.Stop()
-		state.keepAlive = nil
+	if state, ok := w.states[distro.Name]; ok {
+		if state.keepAlive != nil {
+			state.keepAlive.Stop()
+			state.keepAlive = nil
+		}
+		state.StartedAt = time.Time{}
 	}
 	w.mu.Unlock()
 
