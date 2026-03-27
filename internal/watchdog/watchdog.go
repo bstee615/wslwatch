@@ -29,6 +29,7 @@ type DistroStatus struct {
 	InBackoff    bool
 	BackoffUntil time.Time
 	Exhausted    bool
+	FailureTimes []time.Time
 }
 
 // Status is the overall watchdog status.
@@ -221,6 +222,7 @@ func (w *Watchdog) GetStatus() Status {
 			InBackoff:    state.tracker.InBackoff(),
 			BackoffUntil: state.tracker.BackoffUntil(),
 			Exhausted:    state.Exhausted,
+			FailureTimes: state.tracker.FailureTimes(),
 		})
 	}
 

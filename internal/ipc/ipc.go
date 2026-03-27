@@ -35,13 +35,14 @@ type StatusData struct {
 
 // DistroData holds per-distro status information.
 type DistroData struct {
-	Name         string    `json:"name"`
-	State        string    `json:"state"`
-	Uptime       string    `json:"uptime"`
-	RestartCount int       `json:"restart_count"`
-	InBackoff    bool      `json:"in_backoff"`
-	BackoffUntil time.Time `json:"backoff_until,omitempty"`
-	Exhausted    bool      `json:"exhausted"`
+	Name         string      `json:"name"`
+	State        string      `json:"state"`
+	Uptime       string      `json:"uptime"`
+	RestartCount int         `json:"restart_count"`
+	InBackoff    bool        `json:"in_backoff"`
+	BackoffUntil time.Time   `json:"backoff_until,omitempty"`
+	Exhausted    bool        `json:"exhausted"`
+	FailureTimes []time.Time `json:"failure_times,omitempty"`
 }
 
 // Handler is called by the server to handle incoming requests.

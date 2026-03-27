@@ -39,11 +39,11 @@ func FormatUptime(d time.Duration) string {
 
 const divider = "──────────────────────────────────────────────────────"
 
-// barWidth is the number of characters in the failure history bar.
+// barWidth is the number of characters in the uptime history bar.
 const barWidth = 60
 
-// maxRestarts is the reference maximum used to scale the bar.
-const maxRestarts = 10
+// barWindow is the time window the bar represents.
+const barWindow = 60 * time.Minute
 
 // RenderStatus renders the full status output to w.
 func RenderStatus(w io.Writer, data *ipc.StatusData) {
@@ -63,20 +63,21 @@ func RenderStatus(w io.Writer, data *ipc.StatusData) {
 		renderDistroLine(w, d)
 	}
 
-	// Failure history bars (only for distros that have had restarts).
+	// Uptime history bars for all non-ignored distros.
 	for _, d := range data.Distros {
-		if d.RestartCount == 0 {
+		if strings.EqualFold(d.State, "ignored") {
 			continue
 		}
 		fmt.Fprintln(w)
 		gray := color.New(color.FgWhite).SprintFunc()
-		fmt.Fprintf(w, "Failure history (last 60m) — %s\n", gray(d.Name))
-		fmt.Fprintf(w, "  %s\n", buildBar(d.RestartCount))
+		fmt.Fprintf(w, "Uptime history (last 60m) — %s\n", gray(d.Name))
+		fmt.Fprintf(w, "  %s\n", buildTimeBar(d.FailureTimes, data.StartedAt, time.Now()))
+		fmt.Fprintf(w, "  %-15s%-15s%-15s%-15s\n", "60m", "45m", "30m", "15m")
 	}
 
 	// Legend.
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Legend: █ failure  ░ healthy  ─ no data")
+	fmt.Fprintln(w, "Legend: █ down  ░ healthy  ─ no data")
 }
 
 // renderDistroLine writes a single distro status line.
@@ -109,22 +110,42 @@ func renderDistroLine(w io.Writer, d ipc.DistroData) {
 	}
 }
 
-// buildBar produces a barWidth-character bar where filled blocks represent
-// relative failure density based on restart_count.
-func buildBar(restartCount int) string {
-	filled := restartCount
-	if filled > maxRestarts {
-		filled = maxRestarts
-	}
-	// Scale filled to barWidth.
-	filledCells := (filled * barWidth) / maxRestarts
-	if filledCells < 1 {
-		filledCells = 1
-	}
-	emptyCells := barWidth - filledCells
+// buildTimeBar produces a barWidth-character bar spanning the last 60 minutes.
+// Each cell represents 1 minute. Cells before startedAt are shown as "─" (no data),
+// cells with a failure are "█" (red), and healthy cells are "░".
+func buildTimeBar(failureTimes []time.Time, startedAt time.Time, now time.Time) string {
+	windowStart := now.Add(-barWindow)
+	cellDur := barWindow / time.Duration(barWidth) // 1 minute per cell
 
 	red := color.New(color.FgRed).SprintFunc()
-	return red(strings.Repeat("█", filledCells)) + strings.Repeat("░", emptyCells)
+
+	// Build a set of which cells have failures.
+	failureCells := make(map[int]bool)
+	for _, ft := range failureTimes {
+		if ft.Before(windowStart) || ft.After(now) {
+			continue
+		}
+		cell := int(ft.Sub(windowStart) / cellDur)
+		if cell >= barWidth {
+			cell = barWidth - 1
+		}
+		failureCells[cell] = true
+	}
+
+	var buf strings.Builder
+	for i := 0; i < barWidth; i++ {
+		if failureCells[i] {
+			buf.WriteString(red("█"))
+		} else {
+			cellEnd := windowStart.Add(time.Duration(i+1) * cellDur)
+			if cellEnd.Before(startedAt) {
+				buf.WriteString("─")
+			} else {
+				buf.WriteString("░")
+			}
+		}
+	}
+	return buf.String()
 }
 
 // RenderNotRunning renders the "not running" message to w.

@@ -2,6 +2,11 @@ package watchdog
 
 import "time"
 
+// displayRetention is how long failure timestamps are kept for the status
+// display bar. This is intentionally longer than the threshold sliding
+// window so that brief blips remain visible in --status output.
+const displayRetention = 60 * time.Minute
+
 // FailureTracker is a sliding window failure tracker. Tracks failures for a distro over a time window.
 // If failures in the window exceed the threshold, the distro enters backoff.
 // After backoff duration expires, the tracker resets.
@@ -10,7 +15,8 @@ type FailureTracker struct {
 	threshold  int           // max failures in window before backoff
 	backoffDur time.Duration // how long to stay in backoff (0 = no backoff)
 
-	failures     []time.Time // timestamps of recent failures
+	failures     []time.Time // timestamps of recent failures (used for threshold logic)
+	allFailures  []time.Time // all failure timestamps kept for display (retained for displayRetention)
 	backoffUntil time.Time   // zero value if not in backoff
 
 	now func() time.Time // injectable clock for testing
@@ -32,7 +38,7 @@ func (ft *FailureTracker) WithClock(now func() time.Time) *FailureTracker {
 	return ft
 }
 
-// pruneOldFailures removes failures older than the window from the front of the slice.
+// pruneOldFailures removes failures older than their respective windows.
 func (ft *FailureTracker) pruneOldFailures() {
 	cutoff := ft.now().Add(-ft.window)
 	i := 0
@@ -40,6 +46,13 @@ func (ft *FailureTracker) pruneOldFailures() {
 		i++
 	}
 	ft.failures = ft.failures[i:]
+
+	displayCutoff := ft.now().Add(-displayRetention)
+	j := 0
+	for j < len(ft.allFailures) && ft.allFailures[j].Before(displayCutoff) {
+		j++
+	}
+	ft.allFailures = ft.allFailures[j:]
 }
 
 // RecordFailure records a failure at the current time.
@@ -50,6 +63,7 @@ func (ft *FailureTracker) RecordFailure() {
 	}
 
 	ft.failures = append(ft.failures, ft.now())
+	ft.allFailures = append(ft.allFailures, ft.now())
 	ft.pruneOldFailures()
 
 	if len(ft.failures) >= ft.threshold && ft.backoffDur > 0 {
@@ -83,8 +97,18 @@ func (ft *FailureTracker) FailureCount() int {
 	return len(ft.failures)
 }
 
-// Reset clears all failure history and exits backoff.
+// FailureTimes returns a copy of all failure timestamps in the current window,
+// including those that triggered backoff. This is used for display purposes.
+func (ft *FailureTracker) FailureTimes() []time.Time {
+	ft.pruneOldFailures()
+	out := make([]time.Time, len(ft.allFailures))
+	copy(out, ft.allFailures)
+	return out
+}
+
+// Reset clears all uptime history and exits backoff.
 func (ft *FailureTracker) Reset() {
 	ft.failures = nil
+	ft.allFailures = nil
 	ft.backoffUntil = time.Time{}
 }

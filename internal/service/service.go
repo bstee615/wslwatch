@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"time"
 
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/debug"
@@ -144,6 +145,12 @@ func persistPauseState(cfg *config.Config, cfgPath string, distroName string, pa
 	}
 }
 
+// formatDuration formats a duration with at most 1 decimal place of seconds.
+func formatDuration(d time.Duration) string {
+	d = d.Truncate(100 * time.Millisecond)
+	return d.String()
+}
+
 // watchdogStatusToIPCStatus converts watchdog.Status to ipc.StatusData.
 func watchdogStatusToIPCStatus(s watchdog.Status) ipc.StatusData {
 	var distros []ipc.DistroData
@@ -151,16 +158,17 @@ func watchdogStatusToIPCStatus(s watchdog.Status) ipc.StatusData {
 		distros = append(distros, ipc.DistroData{
 			Name:         d.Name,
 			State:        d.State,
-			Uptime:       d.Uptime.String(),
+			Uptime:       formatDuration(d.Uptime),
 			RestartCount: d.RestartCount,
 			InBackoff:    d.InBackoff,
 			BackoffUntil: d.BackoffUntil,
 			Exhausted:    d.Exhausted,
+			FailureTimes: d.FailureTimes,
 		})
 	}
 	return ipc.StatusData{
 		Running:   s.Running,
-		Uptime:    s.Uptime.String(),
+		Uptime:    formatDuration(s.Uptime),
 		StartedAt: s.StartedAt,
 		Distros:   distros,
 	}

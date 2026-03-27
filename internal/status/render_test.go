@@ -47,6 +47,7 @@ func TestRenderStatus(t *testing.T) {
 				State:        "healthy",
 				Uptime:       "2d 4h 11m",
 				RestartCount: 1,
+				FailureTimes: []time.Time{time.Now().Add(-10 * time.Minute)},
 			},
 			{
 				Name:      "Ubuntu-20.04",
@@ -95,9 +96,14 @@ func TestRenderStatus(t *testing.T) {
 		t.Errorf("output missing 'restarts 1': %s", out)
 	}
 
-	// Failure history bar should appear for Ubuntu-22.04 (RestartCount > 0).
-	if !strings.Contains(out, "Failure history") {
-		t.Errorf("output missing failure history section: %s", out)
+	// Uptime history bar should appear for all non-ignored distros.
+	if !strings.Contains(out, "Uptime history") {
+		t.Errorf("output missing uptime history section: %s", out)
+	}
+
+	// Axis labels.
+	if !strings.Contains(out, "60m") || !strings.Contains(out, "15m") {
+		t.Errorf("output missing axis labels: %s", out)
 	}
 
 	// Legend.
