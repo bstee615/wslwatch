@@ -183,7 +183,7 @@ func (r *WSLRunner) StartKeepAlive(_ context.Context, name string) (KeepAlive, e
 	}
 	done := make(chan struct{})
 	go func() {
-		cmd.Wait()
+		_ = cmd.Wait()
 		close(done)
 	}()
 	return &keepAliveHandle{cancel: cancel, done: done}, nil
@@ -195,8 +195,8 @@ type MockRunner struct {
 	ProbeErr     map[string]error // distro name -> error to return
 	TerminateErr map[string]error
 	StartErr     map[string]error
-	ExecResults    map[string]string // "name:cmd" -> result
-	KeepAliveErr   map[string]error  // distro name -> error to return
+	ExecResults  map[string]string // "name:cmd" -> result
+	KeepAliveErr map[string]error  // distro name -> error to return
 
 	// Track calls
 	ListCalls      int
