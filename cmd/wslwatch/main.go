@@ -397,7 +397,7 @@ func cmdBark() {
 	data, err := os.ReadFile("assets/spike.txt")
 	if err != nil {
 		// Embedded fallback.
-		fmt.Println(spikeASCII)
+		fmt.Print(spikeASCII)
 		return
 	}
 	fmt.Print(string(data))

@@ -29,7 +29,8 @@ func Acquire() (*Lock, error) {
 	// bInitialOwner=false: we acquire via WaitForSingleObject below, which
 	// also handles the WAIT_ABANDONED case if a prior owner crashed.
 	handle, err := windows.CreateMutex(nil, false, name)
-	if err != nil && !errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
+	alreadyExists := errors.Is(err, windows.ERROR_ALREADY_EXISTS)
+	if err != nil && !alreadyExists {
 		return nil, fmt.Errorf("creating mutex: %w", err)
 	}
 	if handle == 0 {
@@ -38,12 +39,18 @@ func Acquire() (*Lock, error) {
 
 	// Non-blocking attempt to acquire ownership.
 	ret, _ := windows.WaitForSingleObject(handle, 0)
-	if ret != uint32(windows.WAIT_OBJECT_0) && ret != uint32(windows.WAIT_ABANDONED) {
+	switch {
+	case ret == uint32(windows.WAIT_ABANDONED):
+		// Previous owner crashed; we now own it.
+		return &Lock{handle: handle}, nil
+	case ret == uint32(windows.WAIT_OBJECT_0) && !alreadyExists:
+		// Fresh mutex, successfully acquired.
+		return &Lock{handle: handle}, nil
+	default:
+		// Either WAIT_TIMEOUT (cross-process) or recursive lock (same-process).
 		_ = windows.CloseHandle(handle)
 		return nil, fmt.Errorf("another instance of wslwatch is already running")
 	}
-
-	return &Lock{handle: handle}, nil
 }
 
 // Release releases ownership of the mutex and closes the handle.
