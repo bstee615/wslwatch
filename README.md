@@ -12,22 +12,14 @@ A single-binary Windows Service that monitors WSL2 distros and automatically res
 
 ## Install
 
-### Download from GitHub Releases (recommended)
-
-1. Grab the latest `wslwatch.exe` from [Releases](https://github.com/bstee615/wslwatch/releases/latest).
-2. Put it somewhere on your PATH, or let the installer do it:
+1. Download `wslwatch.exe` from [Releases](https://github.com/bstee615/wslwatch/releases/latest).
+2. Run the installer (requires admin):
 
 ```powershell
-# Move to a permanent location
-New-Item -ItemType Directory -Force -Path "$env:LOCALAPPDATA\wslwatch" | Out-Null
-Move-Item .\wslwatch.exe "$env:LOCALAPPDATA\wslwatch\wslwatch.exe"
-
-# Add to PATH (current user)
-$p = [Environment]::GetEnvironmentVariable('Path', 'User')
-if ($p -notlike "*wslwatch*") {
-    [Environment]::SetEnvironmentVariable('Path', "$p;$env:LOCALAPPDATA\wslwatch", 'User')
-}
+.\wslwatch.exe --install --add-to-path
 ```
+
+This copies the binary to `%ProgramData%\wslwatch`, registers it as a Windows Service, and adds it to the system PATH.
 
 ### Build from source
 
