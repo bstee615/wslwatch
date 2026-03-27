@@ -3,11 +3,13 @@
 package service
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"syscall"
@@ -29,10 +31,11 @@ const (
 // Install installs the wslwatch service.
 // copyBinary: path to the binary to install (usually os.Executable())
 // addToPath: whether to add the install dir to the system PATH
+// serviceUser: Windows account to run the service as (e.g. ".\benja")
 //
 // Install is idempotent: if the service already exists it is stopped, the
 // binary is updated, the config is refreshed, and the service is restarted.
-func Install(copyBinary string, addToPath bool) error {
+func Install(copyBinary string, addToPath bool, serviceUser string) error {
 	// 1. Determine install directory.
 	installDir := filepath.Join(os.Getenv("PROGRAMDATA"), "wslwatch")
 
@@ -70,25 +73,42 @@ func Install(copyBinary string, addToPath bool) error {
 		}
 	}
 
+	// 6b. Prompt for password if running as a specific user.
+	var password string
+	if serviceUser != "" {
+		fmt.Printf("Service will run as %s\n", serviceUser)
+		fmt.Print("Enter Windows password: ")
+		pw, err := readPassword()
+		if err != nil {
+			return fmt.Errorf("reading password: %w", err)
+		}
+		password = pw
+	}
+
 	// 7. Create or update the service.
 	var s *mgr.Service
 	if existing != nil {
 		// Service already registered — update its config in place.
-		if err := existing.UpdateConfig(mgr.Config{
-			DisplayName:    DisplayName,
-			StartType:      mgr.StartAutomatic,
-			Description:    Description,
-			BinaryPathName: destBinary,
-		}); err != nil {
+		cfg := mgr.Config{
+			DisplayName:      DisplayName,
+			StartType:        mgr.StartAutomatic,
+			Description:      Description,
+			BinaryPathName:   destBinary,
+			ServiceStartName: serviceUser,
+			Password:         password,
+		}
+		if err := existing.UpdateConfig(cfg); err != nil {
 			return fmt.Errorf("updating service config: %w", err)
 		}
 		s = existing
 	} else {
 		// First-time installation.
 		s, err = m.CreateService(ServiceName, destBinary, mgr.Config{
-			DisplayName: DisplayName,
-			StartType:   mgr.StartAutomatic,
-			Description: Description,
+			DisplayName:      DisplayName,
+			StartType:        mgr.StartAutomatic,
+			Description:      Description,
+			ServiceStartName: serviceUser,
+			Password:         password,
 		})
 		if err != nil {
 			return fmt.Errorf("creating service: %w", err)
@@ -134,6 +154,34 @@ func stopServiceWait(s *mgr.Service) {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
+}
+
+// readPassword reads a line from stdin with console echo disabled.
+func readPassword() (string, error) {
+	handle := windows.Handle(os.Stdin.Fd())
+	var mode uint32
+	if err := windows.GetConsoleMode(handle, &mode); err != nil {
+		// Fallback: read with echo (e.g., redirected stdin).
+		reader := bufio.NewReader(os.Stdin)
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimRight(line, "\r\n"), nil
+	}
+
+	if err := windows.SetConsoleMode(handle, mode&^windows.ENABLE_ECHO_INPUT); err != nil {
+		return "", fmt.Errorf("disabling echo: %w", err)
+	}
+	defer windows.SetConsoleMode(handle, mode)
+
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	fmt.Println() // newline after hidden input
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(line, "\r\n"), nil
 }
 
 // copyFile copies src to dst, creating or overwriting dst.

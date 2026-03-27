@@ -68,7 +68,8 @@ func TestWatchdogCheckAllHealthyDistro(t *testing.T) {
 	assert.Equal(t, 0, runner.StartCalls["Ubuntu"], "start should not be called for healthy distro")
 }
 
-// TestWatchdogCheckAllDeadDistro verifies that a stopped distro triggers a restart.
+// TestWatchdogCheckAllDeadDistro verifies that a stopped distro triggers a restart
+// after enough failures accumulate (failure_threshold).
 func TestWatchdogCheckAllDeadDistro(t *testing.T) {
 	runner := wsl.NewMockRunner()
 	runner.Distros = []wsl.DistroInfo{
@@ -80,10 +81,17 @@ func TestWatchdogCheckAllDeadDistro(t *testing.T) {
 	})
 
 	w := New(cfg, runner, testLogger())
-	w.checkAll()
 
-	assert.Equal(t, 1, runner.TerminateCalls["Ubuntu"], "terminate should be called for dead distro")
-	assert.Equal(t, 1, runner.StartCalls["Ubuntu"], "start should be called for dead distro")
+	// Failures below threshold should not trigger restart.
+	for i := 0; i < cfg.FailureThreshold-1; i++ {
+		w.checkAll()
+	}
+	assert.Equal(t, 0, runner.TerminateCalls["Ubuntu"], "should not restart before threshold")
+
+	// One more failure reaches the threshold.
+	w.checkAll()
+	assert.Equal(t, 1, runner.TerminateCalls["Ubuntu"], "terminate should be called at threshold")
+	assert.Equal(t, 1, runner.StartCalls["Ubuntu"], "start should be called at threshold")
 	assert.Equal(t, 1, w.states["Ubuntu"].RestartCount, "restart count should be incremented")
 }
 
@@ -122,17 +130,25 @@ func TestWatchdogMaxRestarts(t *testing.T) {
 
 	w := New(cfg, runner, testLogger())
 
-	// First two calls should restart.
-	w.checkAll()
+	// Helper: run enough checks to trigger one restart (failure_threshold checks).
+	triggerRestart := func() {
+		for i := 0; i < cfg.FailureThreshold; i++ {
+			w.checkAll()
+		}
+	}
+
+	// First restart.
+	triggerRestart()
 	assert.False(t, w.states["Ubuntu"].Exhausted, "should not be exhausted after 1st restart")
 	assert.Equal(t, 1, w.states["Ubuntu"].RestartCount)
 
-	w.checkAll()
+	// Second restart.
+	triggerRestart()
 	assert.False(t, w.states["Ubuntu"].Exhausted, "should not be exhausted after 2nd restart")
 	assert.Equal(t, 2, w.states["Ubuntu"].RestartCount)
 
-	// Third call: restart count == max_restarts, so this tick should exhaust without restarting.
-	w.checkAll()
+	// Third threshold hit: restart count == max_restarts, so this should exhaust.
+	triggerRestart()
 	assert.True(t, w.states["Ubuntu"].Exhausted, "should be exhausted after max restarts reached")
 	// Terminate/Start should only have been called twice total.
 	assert.Equal(t, 2, runner.TerminateCalls["Ubuntu"])
@@ -231,7 +247,9 @@ func TestWatchdogGlobalPause(t *testing.T) {
 	assert.Equal(t, 0, runner.TerminateCalls["Ubuntu"], "globally paused: no restart expected")
 
 	w.ResumeAll()
-	w.checkAll()
+	for i := 0; i < cfg.FailureThreshold; i++ {
+		w.checkAll()
+	}
 	assert.Equal(t, 1, runner.TerminateCalls["Ubuntu"], "after resume: restart expected")
 }
 
@@ -247,7 +265,9 @@ func TestWatchdogStartCommandExec(t *testing.T) {
 	})
 
 	w := New(cfg, runner, testLogger())
-	w.checkAll()
+	for i := 0; i < cfg.FailureThreshold; i++ {
+		w.checkAll()
+	}
 
 	assert.Equal(t, 1, runner.StartCalls["Ubuntu"])
 	// Exec is called with sh -c <StartCommand>.
@@ -310,7 +330,11 @@ func TestWatchdogKeepAliveOnRestart(t *testing.T) {
 	})
 
 	w := New(cfg, runner, testLogger())
-	w.checkAll()
+
+	// Run enough checks to trigger a restart.
+	for i := 0; i < cfg.FailureThreshold; i++ {
+		w.checkAll()
+	}
 
 	assert.Equal(t, 1, runner.KeepAliveCalls["Ubuntu"], "keep-alive should be started after restart")
 }
@@ -388,11 +412,13 @@ func TestWatchdogUptimeResetsAfterRestart(t *testing.T) {
 	w.checkAll()
 	assert.False(t, w.states["Ubuntu"].StartedAt.IsZero(), "StartedAt should be set after healthy check")
 
-	// Simulate distro going unhealthy and triggering restart.
+	// Simulate distro going unhealthy and triggering restart after threshold failures.
 	runner.Distros = []wsl.DistroInfo{
 		{Name: "Ubuntu", State: wsl.StateStopped, Version: 2},
 	}
-	w.checkAll()
+	for i := 0; i < cfg.FailureThreshold; i++ {
+		w.checkAll()
+	}
 
 	// After restart, StartedAt should be reset.
 	assert.True(t, w.states["Ubuntu"].StartedAt.IsZero(), "StartedAt should be reset after restart")
