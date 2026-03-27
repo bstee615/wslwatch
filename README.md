@@ -32,6 +32,7 @@ wslwatch --status
 | `wslwatch --uninstall` | Remove the Windows Service |
 | `wslwatch --autoconfig` | Generate config from installed distros |
 | `wslwatch --config <key> <value>` | Set a config value |
+| `wslwatch --config` | Show config file path |
 | `wslwatch --status` | Show live status |
 | `wslwatch --pause <distro>` | Pause monitoring a distro |
 | `wslwatch --resume <distro>` | Resume monitoring a distro |
@@ -88,10 +89,15 @@ wslwatch  ● running  uptime 3d 14h 22m
   Ubuntu-20.04         ⏸ paused
   docker-desktop       ─ ignored
 
-Failure history (last 60m) — Ubuntu-22.04
-  ██░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+Uptime history (last 60m) — Ubuntu-22.04
+  ─────────────────────────────────────────────────████░░░░░░
+  60m            45m            30m            15m
 
-Legend: █ failure  ░ healthy  ─ no data
+Uptime history (last 60m) — Ubuntu-20.04
+  ────────────────────────────────────────────────────░░░░░░░░
+  60m            45m            30m            15m
+
+Legend: █ down  ░ healthy  ─ no data
 ```
 
 ## Building
