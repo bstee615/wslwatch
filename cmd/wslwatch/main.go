@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -242,7 +243,7 @@ func autoconfigCmd() *cobra.Command {
 
 func runAutoconfig(logger *slog.Logger) error {
 	runner := wsl.NewExecRunner()
-	distros, err := wsl.ListDistros(runner, 10e9) // 10s timeout
+	distros, err := wsl.ListDistros(runner, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf("enumerating distros: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,7 @@ func TestRunWithTimeout_MockSuccess(t *testing.T) {
 		},
 	}
 
-	out, err := RunWithTimeout(mock, 5e9, "-e", "echo", "ok")
+	out, err := RunWithTimeout(mock, 5*time.Second, "-e", "echo", "ok")
 	require.NoError(t, err)
 	assert.Equal(t, "ok", out)
 }
@@ -53,7 +54,7 @@ func TestRunWithTimeout_MockError(t *testing.T) {
 		},
 	}
 
-	_, err := RunWithTimeout(mock, 5e9, "-e", "echo", "ok")
+	_, err := RunWithTimeout(mock, 5*time.Second, "-e", "echo", "ok")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "mock error")
 }
@@ -69,7 +70,7 @@ func TestProbeDistro_Success(t *testing.T) {
 		},
 	}
 
-	ok, err := ProbeDistro(mock, "Ubuntu", 5e9)
+	ok, err := ProbeDistro(mock, "Ubuntu", 5*time.Second)
 	require.NoError(t, err)
 	assert.True(t, ok)
 }
@@ -81,7 +82,7 @@ func TestProbeDistro_BadOutput(t *testing.T) {
 		},
 	}
 
-	ok, err := ProbeDistro(mock, "Ubuntu", 5e9)
+	ok, err := ProbeDistro(mock, "Ubuntu", 5*time.Second)
 	require.NoError(t, err)
 	assert.False(t, ok)
 }
@@ -93,7 +94,7 @@ func TestProbeDistro_Error(t *testing.T) {
 		},
 	}
 
-	ok, err := ProbeDistro(mock, "Ubuntu", 5e9)
+	ok, err := ProbeDistro(mock, "Ubuntu", 5*time.Second)
 	assert.Error(t, err)
 	assert.False(t, ok)
 }
