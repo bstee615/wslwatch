@@ -26,6 +26,9 @@ const (
 // Install installs the wslwatch service.
 // copyBinary: path to the binary to install (usually os.Executable())
 // addToPath: whether to add the install dir to the system PATH
+//
+// Install is idempotent: if the service already exists it is stopped, the
+// binary is updated, the config is refreshed, and the service is restarted.
 func Install(copyBinary string, addToPath bool) error {
 	// 1. Determine install directory.
 	installDir := filepath.Join(os.Getenv("PROGRAMDATA"), "wslwatch")
@@ -35,38 +38,62 @@ func Install(copyBinary string, addToPath bool) error {
 		return fmt.Errorf("creating install dir %q: %w", installDir, err)
 	}
 
-	// 3. Copy binary to install dir as wslwatch.exe.
-	destBinary := filepath.Join(installDir, "wslwatch.exe")
-	if err := copyFile(copyBinary, destBinary); err != nil {
-		return fmt.Errorf("copying binary to %q: %w", destBinary, err)
-	}
-
-	// 4. Optionally add install dir to system PATH.
-	if addToPath {
-		if err := addToSystemPath(installDir); err != nil {
-			log.Printf("warning: could not add %q to system PATH: %v", installDir, err)
-		}
-	}
-
-	// 5. Connect to SCM.
+	// 3. Connect to SCM early so we can stop a running service before
+	//    overwriting the binary (Windows locks executables of running processes).
 	m, err := mgr.Connect()
 	if err != nil {
 		return fmt.Errorf("connecting to SCM: %w", err)
 	}
 	defer m.Disconnect()
 
-	// 6. Create service.
-	s, err := m.CreateService(ServiceName, destBinary, mgr.Config{
-		DisplayName: DisplayName,
-		StartType:   mgr.StartAutomatic,
-		Description: Description,
-	})
-	if err != nil {
-		return fmt.Errorf("creating service: %w", err)
-	}
-	defer s.Close()
+	destBinary := filepath.Join(installDir, "wslwatch.exe")
 
-	// 7. Configure failure actions: restart after 5s, 10s, 30s.
+	// 4. If the service already exists, stop it so the binary file is not locked.
+	existing, _ := m.OpenService(ServiceName)
+	if existing != nil {
+		defer existing.Close()
+		stopServiceWait(existing)
+	}
+
+	// 5. Copy binary (safe now that any running instance has been stopped).
+	if err := copyFile(copyBinary, destBinary); err != nil {
+		return fmt.Errorf("copying binary to %q: %w", destBinary, err)
+	}
+
+	// 6. Optionally add install dir to system PATH.
+	if addToPath {
+		if err := addToSystemPath(installDir); err != nil {
+			log.Printf("warning: could not add %q to system PATH: %v", installDir, err)
+		}
+	}
+
+	// 7. Create or update the service.
+	var s *mgr.Service
+	if existing != nil {
+		// Service already registered — update its config in place.
+		if err := existing.UpdateConfig(mgr.Config{
+			DisplayName:    DisplayName,
+			StartType:      mgr.StartAutomatic,
+			Description:    Description,
+			BinaryPathName: destBinary,
+		}); err != nil {
+			return fmt.Errorf("updating service config: %w", err)
+		}
+		s = existing
+	} else {
+		// First-time installation.
+		s, err = m.CreateService(ServiceName, destBinary, mgr.Config{
+			DisplayName: DisplayName,
+			StartType:   mgr.StartAutomatic,
+			Description: Description,
+		})
+		if err != nil {
+			return fmt.Errorf("creating service: %w", err)
+		}
+		defer s.Close()
+	}
+
+	// 8. (Re-)configure failure actions.
 	if err := s.SetRecoveryActions([]mgr.RecoveryAction{
 		{Type: mgr.ServiceRestart, Delay: 5 * time.Second},
 		{Type: mgr.ServiceRestart, Delay: 10 * time.Second},
@@ -75,14 +102,35 @@ func Install(copyBinary string, addToPath bool) error {
 		return fmt.Errorf("setting recovery actions: %w", err)
 	}
 
-	// 8. Start the service.
-	if err := s.Start(); err != nil {
-		return fmt.Errorf("starting service: %w", err)
+	// 9. Start the service only if it is not already running.
+	status, err := s.Query()
+	if err != nil {
+		return fmt.Errorf("querying service status: %w", err)
+	}
+	if status.State != svc.Running && status.State != svc.StartPending {
+		if err := s.Start(); err != nil {
+			return fmt.Errorf("starting service: %w", err)
+		}
 	}
 
-	// 9. Confirm.
 	fmt.Println("wslwatch service installed and started")
 	return nil
+}
+
+// stopServiceWait sends a stop control to s and waits up to 10 seconds for it
+// to reach the Stopped state. Errors are ignored — the caller continues regardless.
+func stopServiceWait(s *mgr.Service) {
+	if _, err := s.Control(svc.Stop); err != nil {
+		return // wasn't running, nothing to do
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		status, err := s.Query()
+		if err != nil || status.State == svc.Stopped {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 // copyFile copies src to dst, creating or overwriting dst.
@@ -153,23 +201,7 @@ func Uninstall(removeAll bool) error {
 	defer s.Close()
 
 	// 3. Stop the service.
-	if _, err := s.Control(svc.Stop); err != nil {
-		// If it wasn't running, continue.
-		log.Printf("warning: stopping service: %v", err)
-	} else {
-		// Wait up to 30 seconds for it to stop.
-		deadline := time.Now().Add(30 * time.Second)
-		for time.Now().Before(deadline) {
-			status, err := s.Query()
-			if err != nil {
-				break
-			}
-			if status.State == svc.Stopped {
-				break
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
-	}
+	stopServiceWait(s)
 
 	// 4. Delete service.
 	if err := s.Delete(); err != nil {
