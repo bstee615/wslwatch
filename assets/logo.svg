@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 200" width="820" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#1e2140"/>
+      <stop offset="50%" stop-color="#171a30"/>
+      <stop offset="100%" stop-color="#12152a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="820" height="200" rx="16" fill="url(#bg)"/>
+
+  <!-- ============ ASCII ART (just the character) ============ -->
+  <g font-family="'Cascadia Code','Consolas','Courier New',monospace" font-size="22" xml:space="preserve">
+    <text x="60" y="55"  fill="#e8d5a8">  ／\、</text>
+    <text x="44" y="85"  fill="#e8d5a8">（<tspan fill="#66ccff">ﾟ</tspan>､ <tspan fill="#66ccff">｡</tspan> ７</text>
+    <text x="60" y="115" fill="#e8d5a8">  |  ~ヽ</text>
+    <text x="60" y="145" fill="#e8d5a8">  じしf_, )ノ</text>
+    <text x="82" y="128" fill="#dd4444" font-size="14">♦♦♦</text>
+  </g>
+
+  <!-- ============ TEXT ============ -->
+  <text x="380" y="90" font-family="'Segoe UI',Arial,sans-serif" font-size="56" font-weight="bold" fill="#e8d5a8" letter-spacing="3">wslwatch</text>
+  <text x="382" y="125" font-family="'Segoe UI',Arial,sans-serif" font-size="16" fill="#7a8da0" letter-spacing="1">keep your WSL distros awake</text>
+</svg>

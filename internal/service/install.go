@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"syscall"
+	"unsafe"
+
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
@@ -154,6 +157,8 @@ func copyFile(src, dst string) error {
 }
 
 // addToSystemPath appends dir to the system PATH in the registry, if not already present.
+// It always broadcasts WM_SETTINGCHANGE so that running processes pick up the
+// current PATH, even if no registry write was needed.
 func addToSystemPath(dir string) error {
 	const regPath = `SYSTEM\CurrentControlSet\Control\Session Manager\Environment`
 
@@ -169,18 +174,41 @@ func addToSystemPath(dir string) error {
 		return fmt.Errorf("reading PATH from registry: %w", err)
 	}
 
-	// Check if dir is already in PATH.
+	// Add dir to PATH if not already present.
+	found := false
 	for _, segment := range filepath.SplitList(currentPath) {
 		if filepath.Clean(segment) == filepath.Clean(dir) {
-			return nil
+			found = true
+			break
+		}
+	}
+	if !found {
+		newPath := currentPath + string(os.PathListSeparator) + dir
+		if err := key.SetExpandStringValue("Path", newPath); err != nil {
+			return fmt.Errorf("writing PATH to registry: %w", err)
 		}
 	}
 
-	newPath := currentPath + string(os.PathListSeparator) + dir
-	if err := key.SetExpandStringValue("Path", newPath); err != nil {
-		return fmt.Errorf("writing PATH to registry: %w", err)
-	}
+	// Broadcast WM_SETTINGCHANGE so running processes (Explorer, terminals)
+	// pick up the new PATH without requiring a reboot/re-login.
+	broadcastSettingChange()
+
 	return nil
+}
+
+// broadcastSettingChange sends WM_SETTINGCHANGE to all top-level windows so
+// they re-read environment variables from the registry.
+func broadcastSettingChange() {
+	env, _ := syscall.UTF16PtrFromString("Environment")
+	syscall.NewLazyDLL("user32.dll").NewProc("SendMessageTimeoutW").Call(
+		0xFFFF,          // HWND_BROADCAST
+		uintptr(0x001A), // WM_SETTINGCHANGE
+		0,
+		uintptr(unsafe.Pointer(env)),
+		0x0002, // SMTO_ABORTIFHUNG
+		5000,   // timeout ms
+		0,
+	)
 }
 
 // Uninstall removes the wslwatch service.

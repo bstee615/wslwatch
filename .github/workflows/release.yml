@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Tests (reuse same checks as CI) ────────────────────
+  test:
+    name: Test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Run tests
+        shell: bash
+        run: go test -v -race -count=1 ./...
+
+  # ── Build & Release ────────────────────────────────────
+  release:
+    name: Build & Release
+    runs-on: windows-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Generate version
+        id: version
+        shell: bash
+        run: |
+          VERSION="0.0.0-$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA::7}"
+          TAG="v${VERSION}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "TAG=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build binary
+        run: |
+          $env:CGO_ENABLED = "0"
+          $ldflags = "-s -w -X main.version=${{ steps.version.outputs.VERSION }}"
+          go build -ldflags $ldflags -o dist/wslwatch.exe ./cmd/wslwatch
+
+      - name: Smoke test
+        run: |
+          dist/wslwatch.exe --help
+          dist/wslwatch.exe --bark
+
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          git tag "${{ steps.version.outputs.TAG }}"
+          git push origin "${{ steps.version.outputs.TAG }}"
+          gh release create "${{ steps.version.outputs.TAG }}" dist/wslwatch.exe \
+            --title "${{ steps.version.outputs.TAG }}" \
+            --generate-notes

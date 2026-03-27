@@ -1,6 +1,50 @@
-# wslwatch
+<p align="center">
+  <img src="assets/logo.svg" alt="wslwatch logo" width="820">
+</p>
 
+<h1 align="center">wslwatch</h1>
+
+<p align="center">
 A single-binary Windows Service that monitors WSL2 distros and automatically restarts them when they die.
+</p>
+
+---
+
+## Install
+
+### Download from GitHub Releases (recommended)
+
+1. Grab the latest `wslwatch.exe` from [Releases](https://github.com/bstee615/wslwatch/releases/latest).
+2. Put it somewhere on your PATH, or let the installer do it:
+
+```powershell
+# Move to a permanent location
+New-Item -ItemType Directory -Force -Path "$env:LOCALAPPDATA\wslwatch" | Out-Null
+Move-Item .\wslwatch.exe "$env:LOCALAPPDATA\wslwatch\wslwatch.exe"
+
+# Add to PATH (current user)
+$p = [Environment]::GetEnvironmentVariable('Path', 'User')
+if ($p -notlike "*wslwatch*") {
+    [Environment]::SetEnvironmentVariable('Path', "$p;$env:LOCALAPPDATA\wslwatch", 'User')
+}
+```
+
+### Build from source
+
+Requires Go 1.21+:
+
+```powershell
+go install github.com/bstee615/wslwatch/cmd/wslwatch@latest
+```
+
+Or clone and build:
+
+```powershell
+git clone https://github.com/bstee615/wslwatch.git
+cd wslwatch
+.\scripts\build.ps1 -Version dev
+# Binary is in dist\wslwatch.exe
+```
 
 ## Features
 
