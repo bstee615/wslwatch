@@ -30,6 +30,7 @@ type DistroInfo struct {
 // * Ubuntu-22.04           Running         2
 //
 //	Ubuntu-20.04           Stopped         2
+//
 // cleanLine strips BOM characters, null bytes, and trailing whitespace/CRLF
 // that wsl.exe sometimes includes in its output.
 func cleanLine(line string) string {

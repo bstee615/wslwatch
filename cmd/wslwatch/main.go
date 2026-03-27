@@ -77,7 +77,7 @@ func runDefault(configFile string) {
 		fmt.Fprintln(os.Stderr, "another instance of wslwatch is already running")
 		os.Exit(1)
 	}
-	defer lk.Release()
+	defer func() { _ = lk.Release() }()
 
 	stopCh := make(chan struct{})
 	sigCh := make(chan os.Signal, 1)

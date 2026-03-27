@@ -205,9 +205,8 @@ func TestMockRunnerExec(t *testing.T) {
 
 // encodeUTF16LE is a test helper that encodes a Go string to UTF-16LE bytes.
 func encodeUTF16LE(s string) []byte {
-	runes := []rune(s)
 	var buf []byte
-	for _, r := range runes {
+	for _, r := range s {
 		var lo [2]byte
 		binary.LittleEndian.PutUint16(lo[:], uint16(r))
 		buf = append(buf, lo[:]...)

@@ -64,6 +64,7 @@ jobs:
         run: go mod download
 
       - name: Run tests
+        shell: bash
         run: go test -v -race -count=1 -coverprofile=coverage-windows.txt ./...
 
       - name: Upload coverage

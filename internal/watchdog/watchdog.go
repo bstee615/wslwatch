@@ -15,8 +15,8 @@ import (
 type DistroManagementState struct {
 	Name         string
 	RestartCount int
-	Exhausted    bool        // true if max_restarts reached
-	StartedAt    time.Time   // when the distro was last observed Running
+	Exhausted    bool      // true if max_restarts reached
+	StartedAt    time.Time // when the distro was last observed Running
 	tracker      *FailureTracker
 }
 

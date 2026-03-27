@@ -27,9 +27,9 @@ type Response struct {
 
 // StatusData is the data field in a status response.
 type StatusData struct {
-	Running   bool       `json:"running"`
-	Uptime    string     `json:"uptime"`     // formatted duration
-	StartedAt time.Time  `json:"started_at"`
+	Running   bool         `json:"running"`
+	Uptime    string       `json:"uptime"` // formatted duration
+	StartedAt time.Time    `json:"started_at"`
 	Distros   []DistroData `json:"distros"`
 }
 

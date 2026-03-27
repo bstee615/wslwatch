@@ -56,16 +56,16 @@ type DistroConfig struct {
 
 // Config is the top-level wslwatch configuration structure.
 type Config struct {
-	LogLevel         string        `yaml:"log_level"`         // debug|info|warn|error
-	LogFile          string        `yaml:"log_file"`          // empty = stdout
-	CheckInterval    Duration      `yaml:"check_interval"`    // default 15s
-	ProbeTimeout     Duration      `yaml:"probe_timeout"`     // default 8s
-	RestartDelay     Duration      `yaml:"restart_delay"`     // default 3s
-	FailureWindow    Duration      `yaml:"failure_window"`    // default 60s
-	FailureThreshold int           `yaml:"failure_threshold"` // default 5
-	BackoffDuration  Duration      `yaml:"backoff_duration"`  // default 0s
+	LogLevel         string         `yaml:"log_level"`         // debug|info|warn|error
+	LogFile          string         `yaml:"log_file"`          // empty = stdout
+	CheckInterval    Duration       `yaml:"check_interval"`    // default 15s
+	ProbeTimeout     Duration       `yaml:"probe_timeout"`     // default 8s
+	RestartDelay     Duration       `yaml:"restart_delay"`     // default 3s
+	FailureWindow    Duration       `yaml:"failure_window"`    // default 60s
+	FailureThreshold int            `yaml:"failure_threshold"` // default 5
+	BackoffDuration  Duration       `yaml:"backoff_duration"`  // default 0s
 	Distros          []DistroConfig `yaml:"distros"`
-	IgnoredDistros   []string      `yaml:"ignored_distros"`
+	IgnoredDistros   []string       `yaml:"ignored_distros"`
 }
 
 // Default returns a Config populated with sane defaults.
