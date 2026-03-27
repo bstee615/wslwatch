@@ -10,6 +10,14 @@ import (
 	"unicode/utf16"
 )
 
+// KeepAlive represents a running keep-alive process for a distro.
+type KeepAlive interface {
+	// Alive returns true if the keep-alive process is still running.
+	Alive() bool
+	// Stop terminates the keep-alive process and waits for it to exit.
+	Stop()
+}
+
 // Runner defines the interface for interacting with WSL distros.
 type Runner interface {
 	// ListDistros returns all installed WSL distros with their states.
@@ -27,6 +35,10 @@ type Runner interface {
 
 	// Exec runs a command inside the distro, returns stdout.
 	Exec(ctx context.Context, name string, args ...string) (string, error)
+
+	// StartKeepAlive spawns a long-running no-op process inside the distro to
+	// prevent it from shutting down due to having no running processes.
+	StartKeepAlive(ctx context.Context, name string) (KeepAlive, error)
 }
 
 // WSLRunner is the real runner using wsl.exe.
@@ -141,19 +153,57 @@ func (r *WSLRunner) Exec(ctx context.Context, name string, args ...string) (stri
 	return out, nil
 }
 
+// keepAliveHandle is the real KeepAlive implementation backed by an OS process.
+type keepAliveHandle struct {
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+func (h *keepAliveHandle) Alive() bool {
+	select {
+	case <-h.done:
+		return false
+	default:
+		return true
+	}
+}
+
+func (h *keepAliveHandle) Stop() {
+	h.cancel()
+	<-h.done
+}
+
+// StartKeepAlive spawns "wsl -d <name> -- sleep infinity" as a background process.
+func (r *WSLRunner) StartKeepAlive(_ context.Context, name string) (KeepAlive, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(ctx, r.WslPath, "-d", name, "--", "sleep", "infinity")
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return nil, fmt.Errorf("start keep-alive for %q: %w", name, err)
+	}
+	done := make(chan struct{})
+	go func() {
+		cmd.Wait()
+		close(done)
+	}()
+	return &keepAliveHandle{cancel: cancel, done: done}, nil
+}
+
 // MockRunner is a mock implementation of Runner for testing.
 type MockRunner struct {
 	Distros      []DistroInfo
 	ProbeErr     map[string]error // distro name -> error to return
 	TerminateErr map[string]error
 	StartErr     map[string]error
-	ExecResults  map[string]string // "name:cmd" -> result
+	ExecResults    map[string]string // "name:cmd" -> result
+	KeepAliveErr   map[string]error  // distro name -> error to return
 
 	// Track calls
 	ListCalls      int
 	ProbeCalls     map[string]int
 	TerminateCalls map[string]int
 	StartCalls     map[string]int
+	KeepAliveCalls map[string]int
 }
 
 // NewMockRunner creates a new MockRunner with initialized maps.
@@ -163,9 +213,11 @@ func NewMockRunner() *MockRunner {
 		TerminateErr:   make(map[string]error),
 		StartErr:       make(map[string]error),
 		ExecResults:    make(map[string]string),
+		KeepAliveErr:   make(map[string]error),
 		ProbeCalls:     make(map[string]int),
 		TerminateCalls: make(map[string]int),
 		StartCalls:     make(map[string]int),
+		KeepAliveCalls: make(map[string]int),
 	}
 }
 
@@ -210,4 +262,21 @@ func (m *MockRunner) Exec(ctx context.Context, name string, args ...string) (str
 		return "", nil
 	}
 	return result, nil
+}
+
+// MockKeepAlive is a mock KeepAlive for testing.
+type MockKeepAlive struct {
+	alive bool
+}
+
+func (h *MockKeepAlive) Alive() bool { return h.alive }
+func (h *MockKeepAlive) Stop()       { h.alive = false }
+
+// StartKeepAlive records the call and returns a mock keep-alive handle.
+func (m *MockRunner) StartKeepAlive(_ context.Context, name string) (KeepAlive, error) {
+	m.KeepAliveCalls[name]++
+	if err, ok := m.KeepAliveErr[name]; ok {
+		return nil, err
+	}
+	return &MockKeepAlive{alive: true}, nil
 }

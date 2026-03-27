@@ -275,3 +275,68 @@ func TestWatchdogReloadConfig(t *testing.T) {
 	assert.NotContains(t, w.states, "Ubuntu", "old distro state should be removed")
 	assert.Contains(t, w.states, "Debian", "new distro state should be added")
 }
+
+// TestWatchdogKeepAliveOnHealthy verifies that a keep-alive is started for a healthy distro.
+func TestWatchdogKeepAliveOnHealthy(t *testing.T) {
+	runner := wsl.NewMockRunner()
+	runner.Distros = []wsl.DistroInfo{
+		{Name: "Ubuntu", State: wsl.StateRunning, Version: 2},
+	}
+
+	cfg := testConfig([]config.DistroConfig{
+		{Name: "Ubuntu", Enabled: true},
+	})
+
+	w := New(cfg, runner, testLogger())
+	w.checkAll()
+
+	assert.Equal(t, 1, runner.KeepAliveCalls["Ubuntu"], "keep-alive should be started for healthy distro")
+
+	// Second check should not start another (mock returns alive=true).
+	w.checkAll()
+	assert.Equal(t, 1, runner.KeepAliveCalls["Ubuntu"], "keep-alive should not be restarted when still alive")
+}
+
+// TestWatchdogKeepAliveOnRestart verifies that a keep-alive is started after restart.
+func TestWatchdogKeepAliveOnRestart(t *testing.T) {
+	runner := wsl.NewMockRunner()
+	runner.Distros = []wsl.DistroInfo{
+		{Name: "Ubuntu", State: wsl.StateStopped, Version: 2},
+	}
+
+	cfg := testConfig([]config.DistroConfig{
+		{Name: "Ubuntu", Enabled: true},
+	})
+
+	w := New(cfg, runner, testLogger())
+	w.checkAll()
+
+	assert.Equal(t, 1, runner.KeepAliveCalls["Ubuntu"], "keep-alive should be started after restart")
+}
+
+// TestWatchdogKeepAliveStoppedOnReload verifies keep-alives are stopped for removed distros.
+func TestWatchdogKeepAliveStoppedOnReload(t *testing.T) {
+	runner := wsl.NewMockRunner()
+	runner.Distros = []wsl.DistroInfo{
+		{Name: "Ubuntu", State: wsl.StateRunning, Version: 2},
+	}
+
+	cfg := testConfig([]config.DistroConfig{
+		{Name: "Ubuntu", Enabled: true},
+	})
+
+	w := New(cfg, runner, testLogger())
+	w.checkAll()
+
+	// Verify keep-alive is set.
+	assert.NotNil(t, w.states["Ubuntu"].keepAlive)
+
+	// Reload with a different distro.
+	newCfg := testConfig([]config.DistroConfig{
+		{Name: "Debian", Enabled: true},
+	})
+	w.ReloadConfig(newCfg)
+
+	assert.NotContains(t, w.states, "Ubuntu", "old distro should be removed")
+	assert.Contains(t, w.states, "Debian", "new distro should be added")
+}

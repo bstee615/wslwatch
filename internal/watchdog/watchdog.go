@@ -18,6 +18,7 @@ type DistroManagementState struct {
 	Exhausted    bool      // true if max_restarts reached
 	StartedAt    time.Time // when the distro was last observed Running
 	tracker      *FailureTracker
+	keepAlive    wsl.KeepAlive
 }
 
 // DistroStatus is the public status view of a distro.
@@ -163,8 +164,11 @@ func (w *Watchdog) ReloadConfig(cfg *config.Config) {
 	}
 
 	// Remove states for distros no longer in config.
-	for name := range w.states {
+	for name, state := range w.states {
 		if !newStateKeys[name] {
+			if state.keepAlive != nil {
+				state.keepAlive.Stop()
+			}
 			delete(w.states, name)
 		}
 	}
@@ -249,9 +253,22 @@ func (w *Watchdog) IsIgnored(name string) bool {
 	return false
 }
 
+// stopAllKeepAlives terminates all running keep-alive processes.
+func (w *Watchdog) stopAllKeepAlives() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, state := range w.states {
+		if state.keepAlive != nil {
+			state.keepAlive.Stop()
+			state.keepAlive = nil
+		}
+	}
+}
+
 // run is the main watch loop, executed in a goroutine by Start.
 func (w *Watchdog) run() {
 	defer close(w.doneCh)
+	defer w.stopAllKeepAlives()
 
 	for {
 		func() {
@@ -343,7 +360,19 @@ func (w *Watchdog) checkAll() {
 			if state.StartedAt.IsZero() {
 				state.StartedAt = time.Now()
 			}
+			needKeepAlive := state.keepAlive == nil || !state.keepAlive.Alive()
 			w.mu.Unlock()
+
+			if needKeepAlive {
+				ka, err := w.runner.StartKeepAlive(ctx, distro.Name)
+				if err != nil {
+					w.logger.Error("failed to start keep-alive", "distro", distro.Name, "error", err)
+				} else {
+					w.mu.Lock()
+					state.keepAlive = ka
+					w.mu.Unlock()
+				}
+			}
 			continue
 		}
 
@@ -408,6 +437,14 @@ func (w *Watchdog) queryDistroHealth(ctx context.Context, name string, distros [
 func (w *Watchdog) restartDistro(ctx context.Context, distro config.DistroConfig) {
 	w.logger.Info("restarting distro", "distro", distro.Name)
 
+	// Stop existing keep-alive before terminating.
+	w.mu.Lock()
+	if state, ok := w.states[distro.Name]; ok && state.keepAlive != nil {
+		state.keepAlive.Stop()
+		state.keepAlive = nil
+	}
+	w.mu.Unlock()
+
 	if err := w.runner.Terminate(ctx, distro.Name); err != nil {
 		w.logger.Error("failed to terminate distro", "distro", distro.Name, "error", err)
 	}
@@ -430,5 +467,17 @@ func (w *Watchdog) restartDistro(ctx context.Context, distro config.DistroConfig
 				"error", err,
 			)
 		}
+	}
+
+	// Start keep-alive process after restart.
+	ka, err := w.runner.StartKeepAlive(ctx, distro.Name)
+	if err != nil {
+		w.logger.Error("failed to start keep-alive after restart", "distro", distro.Name, "error", err)
+	} else {
+		w.mu.Lock()
+		if state, ok := w.states[distro.Name]; ok {
+			state.keepAlive = ka
+		}
+		w.mu.Unlock()
 	}
 }

@@ -41,6 +41,10 @@ func (s *WslWatchService) Execute(args []string, r <-chan svc.ChangeRequest, sta
 
 	status <- svc.Status{State: svc.Running, Accepts: acceptedCmds}
 
+	if err := wsl.EnsureVMIdleTimeout(); err != nil {
+		s.logger.Warn("failed to set vmIdleTimeout in .wslconfig", "error", err)
+	}
+
 	runner := wsl.NewWSLRunner()
 	w := watchdog.New(s.cfg, runner, s.logger)
 	w.Start()

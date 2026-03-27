@@ -26,6 +26,10 @@ func New(cfg *config.Config, cfgPath string, logger *slog.Logger) *WslWatchServi
 
 // RunForeground runs the watchdog and IPC server without Windows SCM.
 func RunForeground(cfg *config.Config, cfgPath string, logger *slog.Logger, stopCh <-chan struct{}) error {
+	if err := wsl.EnsureVMIdleTimeout(); err != nil {
+		logger.Warn("failed to set vmIdleTimeout in .wslconfig", "error", err)
+	}
+
 	runner := wsl.NewWSLRunner()
 	w := watchdog.New(cfg, runner, logger)
 	w.Start()
