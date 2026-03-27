@@ -128,7 +128,14 @@ func Install(copyBinary string, addToPath bool, serviceUser string) error {
 		return fmt.Errorf("setting recovery actions: %w", err)
 	}
 
-	// 9. Start the service only if it is not already running.
+	// 9. Grant "Log on as a service" right to the service user.
+	if serviceUser != "" {
+		if err := grantLogonAsService(serviceUser); err != nil {
+			log.Printf("warning: could not grant SeServiceLogonRight to %s: %v", serviceUser, err)
+		}
+	}
+
+	// 10. Start the service only if it is not already running.
 	status, err := s.Query()
 	if err != nil {
 		return fmt.Errorf("querying service status: %w", err)
@@ -185,6 +192,88 @@ func readPassword() (string, error) {
 		return "", err
 	}
 	return strings.TrimRight(line, "\r\n"), nil
+}
+
+// LSA API types and procedures for granting user rights.
+var (
+	modAdvapi32              = syscall.NewLazyDLL("advapi32.dll")
+	procLsaOpenPolicy        = modAdvapi32.NewProc("LsaOpenPolicy")
+	procLsaAddAccountRights  = modAdvapi32.NewProc("LsaAddAccountRights")
+	procLsaClose             = modAdvapi32.NewProc("LsaClose")
+	procLsaNtStatusToWinError = modAdvapi32.NewProc("LsaNtStatusToWinError")
+)
+
+type lsaUnicodeString struct {
+	Length        uint16
+	MaximumLength uint16
+	Buffer        *uint16
+}
+
+type lsaObjectAttributes struct {
+	Length                   uint32
+	RootDirectory            uintptr
+	ObjectName               uintptr
+	Attributes               uint32
+	SecurityDescriptor       uintptr
+	SecurityQualityOfService uintptr
+}
+
+// grantLogonAsService grants the SeServiceLogonRight to the given account.
+func grantLogonAsService(accountName string) error {
+	// Strip .\ prefix for SID lookup.
+	lookupName := accountName
+	if strings.HasPrefix(lookupName, `.\`) {
+		lookupName = lookupName[2:]
+	}
+
+	// Lookup SID.
+	sid, _, _, err := windows.LookupSID("", lookupName)
+	if err != nil {
+		return fmt.Errorf("looking up SID for %q: %w", lookupName, err)
+	}
+
+	// Open LSA policy.
+	const policyCreateAccount = 0x00000010
+	const policyLookupNames = 0x00000800
+	var attrs lsaObjectAttributes
+	attrs.Length = uint32(unsafe.Sizeof(attrs))
+	var policyHandle uintptr
+	ntStatus, _, _ := procLsaOpenPolicy.Call(
+		0, // local system
+		uintptr(unsafe.Pointer(&attrs)),
+		policyCreateAccount|policyLookupNames,
+		uintptr(unsafe.Pointer(&policyHandle)),
+	)
+	if ntStatus != 0 {
+		winErr, _, _ := procLsaNtStatusToWinError.Call(ntStatus)
+		return fmt.Errorf("LsaOpenPolicy: error code %d", winErr)
+	}
+	defer procLsaClose.Call(policyHandle)
+
+	// Build the LSA_UNICODE_STRING for "SeServiceLogonRight".
+	right, err := windows.UTF16FromString("SeServiceLogonRight")
+	if err != nil {
+		return err
+	}
+	lsaRight := lsaUnicodeString{
+		Length:        uint16(len("SeServiceLogonRight") * 2),
+		MaximumLength: uint16(len(right) * 2),
+		Buffer:        &right[0],
+	}
+
+	// Grant the right.
+	ntStatus, _, _ = procLsaAddAccountRights.Call(
+		policyHandle,
+		uintptr(unsafe.Pointer(sid)),
+		uintptr(unsafe.Pointer(&lsaRight)),
+		1,
+	)
+	if ntStatus != 0 {
+		winErr, _, _ := procLsaNtStatusToWinError.Call(ntStatus)
+		return fmt.Errorf("LsaAddAccountRights: error code %d", winErr)
+	}
+
+	return nil
 }
 
 // copyFile copies src to dst, creating or overwriting dst.
