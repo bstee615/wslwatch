@@ -246,9 +246,16 @@ func (c *Config) SetByKey(key string, value string) error {
 		c.BackoffDuration = d
 	default:
 		// Handle distros.<name>.<field>
-		parts := strings.SplitN(key, ".", 3)
-		if len(parts) == 3 && parts[0] == "distros" {
-			return c.setDistroField(parts[1], parts[2], value)
+		// Split only on the first dot so that distro names containing dots
+		// (e.g. "Ubuntu.22.04") are preserved correctly. The field name is
+		// then extracted by splitting on the last dot of the remainder.
+		if strings.HasPrefix(key, "distros.") {
+			rest := key[len("distros."):]
+			lastDot := strings.LastIndex(rest, ".")
+			if lastDot == -1 {
+				return fmt.Errorf("invalid distro key %q: expected distros.<name>.<field>", key)
+			}
+			return c.setDistroField(rest[:lastDot], rest[lastDot+1:], value)
 		}
 		return fmt.Errorf("unknown config key %q", key)
 	}

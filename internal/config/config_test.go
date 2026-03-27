@@ -279,6 +279,26 @@ func TestSetByKey(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	t.Run("distro name with dots", func(t *testing.T) {
+		cfg := Default()
+		cfg.Distros = []DistroConfig{{Name: "Ubuntu.22.04"}}
+		require.NoError(t, cfg.SetByKey("distros.Ubuntu.22.04.max_restarts", "3"))
+		assert.Equal(t, 3, cfg.Distros[0].MaxRestarts)
+	})
+
+	t.Run("distro name with dots pause", func(t *testing.T) {
+		cfg := Default()
+		cfg.Distros = []DistroConfig{{Name: "My.Distro.Name"}}
+		require.NoError(t, cfg.SetByKey("distros.My.Distro.Name.pause", "true"))
+		assert.True(t, cfg.Distros[0].Pause)
+	})
+
+	t.Run("distros key missing field", func(t *testing.T) {
+		cfg := Default()
+		err := cfg.SetByKey("distros.Ubuntu", "value")
+		require.Error(t, err)
+	})
+
 	t.Run("unknown top-level key", func(t *testing.T) {
 		cfg := Default()
 		err := cfg.SetByKey("nonexistent_key", "value")
