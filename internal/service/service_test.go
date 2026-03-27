@@ -23,6 +23,6 @@ func TestUninstallReturnsErrorOnNonWindows(t *testing.T) {
 func TestRunServiceReturnsErrorOnNonWindows(t *testing.T) {
 	cfg := config.Default()
 	logger := slog.Default()
-	err := service.RunService(cfg, logger)
+	err := service.RunService(cfg, "", logger)
 	assert.Error(t, err)
 }

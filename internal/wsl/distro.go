@@ -30,15 +30,22 @@ type DistroInfo struct {
 // * Ubuntu-22.04           Running         2
 //
 //	Ubuntu-20.04           Stopped         2
+// cleanLine strips BOM characters, null bytes, and trailing whitespace/CRLF
+// that wsl.exe sometimes includes in its output.
+func cleanLine(line string) string {
+	// UTF-8 BOM (\xef\xbb\xbf) and null bytes produced by wsl.exe on some systems.
+	line = strings.ReplaceAll(line, "\xef\xbb\xbf", "")
+	line = strings.ReplaceAll(line, "\x00", "")
+	line = strings.TrimRight(line, "\r\n\t ")
+	return line
+}
+
 func ParseListVerbose(output string) ([]DistroInfo, error) {
 	lines := strings.Split(output, "\n")
 	var distros []DistroInfo
 	firstLine := true
 
 	for _, line := range lines {
-		// Normalize Windows line endings
-		line = strings.TrimRight(line, "\r")
-
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
@@ -105,10 +112,7 @@ func ParseListQuiet(output string) ([]string, error) {
 	var names []string
 
 	for _, line := range lines {
-		// Normalize Windows line endings
-		line = strings.TrimRight(line, "\r")
-		// Trim any surrounding whitespace
-		line = strings.TrimSpace(line)
+		line = strings.TrimSpace(cleanLine(line))
 
 		if line == "" {
 			continue

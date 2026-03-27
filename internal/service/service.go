@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 
 	"golang.org/x/sys/windows/svc"
@@ -23,13 +24,14 @@ const (
 
 // WslWatchService implements svc.Handler and runs the watchdog loop.
 type WslWatchService struct {
-	cfg    *config.Config
-	logger *slog.Logger
+	cfg     *config.Config
+	cfgPath string
+	logger  *slog.Logger
 }
 
 // New creates a new WslWatchService.
-func New(cfg *config.Config, logger *slog.Logger) *WslWatchService {
-	return &WslWatchService{cfg: cfg, logger: logger}
+func New(cfg *config.Config, cfgPath string, logger *slog.Logger) *WslWatchService {
+	return &WslWatchService{cfg: cfg, cfgPath: cfgPath, logger: logger}
 }
 
 // Execute implements svc.Handler. It is called by the Windows SCM.
@@ -42,7 +44,7 @@ func (s *WslWatchService) Execute(args []string, r <-chan svc.ChangeRequest, sta
 	w := watchdog.New(s.cfg, runner, s.logger)
 	w.Start()
 
-	handler := makeHandler(w, s.cfg)
+	handler := makeHandler(w, s.cfg, s.cfgPath, s.logger)
 	ipcServer := ipc.NewServer(handler)
 	if err := ipcServer.Start(); err != nil {
 		s.logger.Warn("IPC server failed to start", "error", err)
@@ -82,13 +84,17 @@ func (s *WslWatchService) Execute(args []string, r <-chan svc.ChangeRequest, sta
 }
 
 // makeHandler creates the IPC handler that delegates to the watchdog.
-func makeHandler(w *watchdog.Watchdog, cfg *config.Config) ipc.Handler {
+func makeHandler(w *watchdog.Watchdog, cfg *config.Config, cfgPath string, logger *slog.Logger) ipc.Handler {
 	return func(req ipc.Request) ipc.Response {
 		switch req.Cmd {
 		case "status":
-			status := w.GetStatus()
-			data := watchdogStatusToIPCStatus(status)
-			return ipc.Response{OK: true, Data: data}
+			s := w.GetStatus()
+			data := watchdogStatusToIPCStatus(s)
+			raw, err := json.Marshal(data)
+			if err != nil {
+				return ipc.Response{OK: false, Error: "marshaling status: " + err.Error()}
+			}
+			return ipc.Response{OK: true, Data: raw}
 
 		case "pause":
 			if req.Distro == "" {
@@ -97,6 +103,7 @@ func makeHandler(w *watchdog.Watchdog, cfg *config.Config) ipc.Handler {
 			if err := w.PauseDistro(req.Distro); err != nil {
 				return ipc.Response{OK: false, Error: err.Error()}
 			}
+			persistPauseState(cfg, cfgPath, req.Distro, true, logger)
 			return ipc.Response{OK: true}
 
 		case "resume":
@@ -106,10 +113,11 @@ func makeHandler(w *watchdog.Watchdog, cfg *config.Config) ipc.Handler {
 			if err := w.ResumeDistro(req.Distro); err != nil {
 				return ipc.Response{OK: false, Error: err.Error()}
 			}
+			persistPauseState(cfg, cfgPath, req.Distro, false, logger)
 			return ipc.Response{OK: true}
 
 		case "reload":
-			newCfg, err := config.Load("")
+			newCfg, err := config.Load(cfgPath)
 			if err != nil {
 				return ipc.Response{OK: false, Error: err.Error()}
 			}
@@ -119,6 +127,20 @@ func makeHandler(w *watchdog.Watchdog, cfg *config.Config) ipc.Handler {
 		default:
 			return ipc.Response{OK: false, Error: "unknown command: " + req.Cmd}
 		}
+	}
+}
+
+// persistPauseState saves the pause/resume state back to config on disk so it
+// survives a service restart.
+func persistPauseState(cfg *config.Config, cfgPath string, distroName string, paused bool, logger *slog.Logger) {
+	for i := range cfg.Distros {
+		if cfg.Distros[i].Name == distroName {
+			cfg.Distros[i].Pause = paused
+			break
+		}
+	}
+	if err := cfg.Save(cfgPath); err != nil {
+		logger.Warn("failed to persist pause state to config", "distro", distroName, "error", err)
 	}
 }
 
@@ -145,26 +167,26 @@ func watchdogStatusToIPCStatus(s watchdog.Status) ipc.StatusData {
 }
 
 // RunService runs the service in SCM mode (called when started by SCM).
-func RunService(cfg *config.Config, logger *slog.Logger) error {
+func RunService(cfg *config.Config, cfgPath string, logger *slog.Logger) error {
 	elog, err := eventlog.Open(ServiceName)
 	if err == nil {
 		defer elog.Close()
 	}
-	s := New(cfg, logger)
+	s := New(cfg, cfgPath, logger)
 	return svc.Run(ServiceName, s)
 }
 
 // RunDebug runs the service in debug mode (foreground, for testing).
-func RunDebug(cfg *config.Config, logger *slog.Logger) error {
-	s := New(cfg, logger)
+func RunDebug(cfg *config.Config, cfgPath string, logger *slog.Logger) error {
+	s := New(cfg, cfgPath, logger)
 	return debug.Run(ServiceName, s)
 }
 
 // RunForeground is provided for API compatibility with the stub; on Windows
 // it delegates to RunDebug.
-func RunForeground(cfg *config.Config, logger *slog.Logger, stopCh <-chan struct{}) error {
+func RunForeground(cfg *config.Config, cfgPath string, logger *slog.Logger, stopCh <-chan struct{}) error {
 	_ = stopCh
-	return RunDebug(cfg, logger)
+	return RunDebug(cfg, cfgPath, logger)
 }
 
 // Ensure context is used (imported for watchdog.run loop usage).

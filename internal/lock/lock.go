@@ -16,27 +16,31 @@ type Lock struct {
 	handle windows.Handle
 }
 
-// Acquire creates or opens the named mutex. If another instance already owns
-// the mutex (ERROR_ALREADY_EXISTS returned by CreateMutex) an error is
-// returned so the caller knows it is not the sole instance.
+// Acquire creates or opens the named mutex and acquires ownership.
+// Returns an error if another instance already holds the mutex.
+// Using WaitForSingleObject with a zero timeout handles the WAIT_ABANDONED
+// case (previous owner crashed without releasing) gracefully.
 func Acquire() (*Lock, error) {
 	name, err := windows.UTF16PtrFromString(mutexName)
 	if err != nil {
 		return nil, fmt.Errorf("encoding mutex name: %w", err)
 	}
 
-	handle, err := windows.CreateMutex(nil, true, name)
-	if err != nil {
-		// CreateMutex returns the handle AND an error when the mutex already
-		// exists; the error is ERROR_ALREADY_EXISTS.
-		if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
-			// Close the handle we just received – we don't own the mutex.
-			if handle != 0 {
-				_ = windows.CloseHandle(handle)
-			}
-			return nil, fmt.Errorf("another instance of wslwatch is already running")
-		}
+	// bInitialOwner=false: we acquire via WaitForSingleObject below, which
+	// also handles the WAIT_ABANDONED case if a prior owner crashed.
+	handle, err := windows.CreateMutex(nil, false, name)
+	if err != nil && !errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
 		return nil, fmt.Errorf("creating mutex: %w", err)
+	}
+	if handle == 0 {
+		return nil, fmt.Errorf("another instance of wslwatch is already running")
+	}
+
+	// Non-blocking attempt to acquire ownership.
+	ret, _ := windows.WaitForSingleObject(handle, 0)
+	if ret != uint32(windows.WAIT_OBJECT_0) && ret != uint32(windows.WAIT_ABANDONED) {
+		_ = windows.CloseHandle(handle)
+		return nil, fmt.Errorf("another instance of wslwatch is already running")
 	}
 
 	return &Lock{handle: handle}, nil

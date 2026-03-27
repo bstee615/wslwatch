@@ -4,15 +4,18 @@ package ipc
 
 import (
 	"net"
+	"os"
 	"time"
 )
 
-const localAddr = "127.0.0.1:47392"
+const unixSocketPath = "/tmp/wslwatch.sock"
 
 func createListener() (net.Listener, error) {
-	return net.Listen("tcp", localAddr)
+	// Remove stale socket from a previous run.
+	_ = os.Remove(unixSocketPath)
+	return net.Listen("unix", unixSocketPath)
 }
 
 func dialPipe(timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("tcp", localAddr, timeout)
+	return net.DialTimeout("unix", unixSocketPath, timeout)
 }

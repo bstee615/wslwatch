@@ -2,11 +2,37 @@
 
 package lock
 
-// Lock is a no-op placeholder on non-Windows platforms.
-type Lock struct{}
+import (
+	"fmt"
+	"os"
+)
 
-// Acquire always succeeds on non-Windows platforms.
-func Acquire() (*Lock, error) { return &Lock{}, nil }
+const lockFile = "/tmp/wslwatch.lock"
 
-// Release is a no-op on non-Windows platforms.
-func (l *Lock) Release() error { return nil }
+// Lock holds an acquired file-based instance lock.
+type Lock struct {
+	file *os.File
+}
+
+// Acquire creates an exclusive lock file to prevent duplicate instances.
+// Uses O_EXCL so only one process can create it at a time.
+func Acquire() (*Lock, error) {
+	f, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil, fmt.Errorf("another instance of wslwatch is already running")
+		}
+		return nil, fmt.Errorf("creating lock file: %w", err)
+	}
+	_, _ = fmt.Fprintf(f, "%d", os.Getpid())
+	return &Lock{file: f}, nil
+}
+
+// Release removes the lock file.
+func (l *Lock) Release() error {
+	if l.file != nil {
+		l.file.Close()
+		l.file = nil
+	}
+	return os.Remove(lockFile)
+}

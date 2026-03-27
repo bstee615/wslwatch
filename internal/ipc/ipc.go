@@ -20,9 +20,9 @@ type Request struct {
 
 // Response is sent back by the server.
 type Response struct {
-	OK    bool        `json:"ok"`
-	Data  interface{} `json:"data,omitempty"`
-	Error string      `json:"error,omitempty"`
+	OK    bool            `json:"ok"`
+	Data  json.RawMessage `json:"data,omitempty"`
+	Error string          `json:"error,omitempty"`
 }
 
 // StatusData is the data field in a status response.

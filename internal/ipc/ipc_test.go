@@ -15,17 +15,15 @@ func TestServerClientRoundtrip(t *testing.T) {
 		if req.Cmd != "status" {
 			return ipc.Response{OK: false, Error: "unknown command"}
 		}
-		return ipc.Response{
-			OK: true,
-			Data: ipc.StatusData{
-				Running:   true,
-				Uptime:    "1h 0m",
-				StartedAt: time.Now(),
-				Distros: []ipc.DistroData{
-					{Name: "Ubuntu-22.04", State: "healthy"},
-				},
+		raw, _ := json.Marshal(ipc.StatusData{
+			Running:   true,
+			Uptime:    "1h 0m",
+			StartedAt: time.Now(),
+			Distros: []ipc.DistroData{
+				{Name: "Ubuntu-22.04", State: "healthy"},
 			},
-		}
+		})
+		return ipc.Response{OK: true, Data: raw}
 	}
 
 	srv := ipc.NewServer(handler)

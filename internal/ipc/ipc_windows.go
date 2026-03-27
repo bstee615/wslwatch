@@ -12,7 +12,9 @@ import (
 
 func createListener() (net.Listener, error) {
 	return winio.ListenPipe(PipeName, &winio.PipeConfig{
-		SecurityDescriptor: "",
+		// Allow Administrators (BA), SYSTEM (SY), and all users (WD) to connect
+		// so that non-elevated CLI invocations can reach the service.
+		SecurityDescriptor: "D:P(A;;GA;;;BA)(A;;GA;;;SY)(A;;GA;;;WD)",
 		MessageMode:        false,
 		InputBufferSize:    4096,
 		OutputBufferSize:   4096,

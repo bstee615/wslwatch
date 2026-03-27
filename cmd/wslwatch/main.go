@@ -63,7 +63,7 @@ func main() {
 func runDefault(configFile string) {
 	if isWindowsService() {
 		cfg, logger := loadConfigAndLogger(configFile)
-		if err := service.RunService(cfg, logger); err != nil {
+		if err := service.RunService(cfg, configFile, logger); err != nil {
 			fmt.Fprintf(os.Stderr, "service error: %v\n", err)
 			os.Exit(1)
 		}
@@ -88,7 +88,7 @@ func runDefault(configFile string) {
 	}()
 
 	fmt.Println("wslwatch running in foreground. Press Ctrl+C to stop.")
-	if err := service.RunForeground(cfg, logger, stopCh); err != nil {
+	if err := service.RunForeground(cfg, configFile, logger, stopCh); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
@@ -333,15 +333,8 @@ func cmdStatus() {
 		os.Exit(1)
 	}
 
-	// resp.Data is map[string]interface{} after JSON unmarshalling.
-	// Re-marshal and unmarshal into StatusData for typed access.
-	raw, err := json.Marshal(resp.Data)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to parse status response: %v\n", err)
-		os.Exit(1)
-	}
 	var data ipc.StatusData
-	if err := json.Unmarshal(raw, &data); err != nil {
+	if err := json.Unmarshal(resp.Data, &data); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to decode status data: %v\n", err)
 		os.Exit(1)
 	}
