@@ -3,9 +3,11 @@ package wsl
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os/exec"
 	"strings"
+	"unicode/utf16"
 )
 
 // Runner defines the interface for interacting with WSL distros.
@@ -53,7 +55,39 @@ func (r *WSLRunner) runCommand(ctx context.Context, args ...string) (string, err
 		return "", fmt.Errorf("wsl.exe %v: %w", args, err)
 	}
 
-	return stdout.String(), nil
+	return decodeUTF16LE(stdout.Bytes()), nil
+}
+
+// decodeUTF16LE converts a UTF-16LE byte slice (with optional BOM) to a UTF-8 string.
+// wsl.exe outputs UTF-16LE encoded text; this function normalises it to Go strings.
+// If the input does not look like UTF-16LE (odd length or no null bytes) it is
+// returned as-is so that non-Windows or mocked callers are unaffected.
+func decodeUTF16LE(b []byte) string {
+	if len(b) < 2 {
+		return string(b)
+	}
+
+	// Heuristic: if there are no null bytes the output is probably already UTF-8.
+	if !bytes.ContainsRune(b, 0) {
+		return string(b)
+	}
+
+	// Strip BOM if present (FF FE).
+	if b[0] == 0xFF && b[1] == 0xFE {
+		b = b[2:]
+	}
+
+	// Need an even number of bytes for UTF-16.
+	if len(b)%2 != 0 {
+		b = b[:len(b)-1]
+	}
+
+	u16s := make([]uint16, len(b)/2)
+	for i := range u16s {
+		u16s[i] = binary.LittleEndian.Uint16(b[2*i:])
+	}
+
+	return string(utf16.Decode(u16s))
 }
 
 // ListDistros returns all installed WSL distros with their states.

@@ -2,6 +2,7 @@ package wsl
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"testing"
 
@@ -199,5 +200,67 @@ func TestMockRunnerExec(t *testing.T) {
 		result, err := mock.Exec(ctx, "Ubuntu-22.04", "unknown-cmd")
 		assert.NoError(t, err)
 		assert.Equal(t, "", result)
+	})
+}
+
+// encodeUTF16LE is a test helper that encodes a Go string to UTF-16LE bytes.
+func encodeUTF16LE(s string) []byte {
+	runes := []rune(s)
+	var buf []byte
+	for _, r := range runes {
+		var lo [2]byte
+		binary.LittleEndian.PutUint16(lo[:], uint16(r))
+		buf = append(buf, lo[:]...)
+	}
+	return buf
+}
+
+func TestDecodeUTF16LE(t *testing.T) {
+	t.Run("plain UTF-8 passthrough", func(t *testing.T) {
+		input := "hello world"
+		assert.Equal(t, input, decodeUTF16LE([]byte(input)))
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		assert.Equal(t, "", decodeUTF16LE(nil))
+	})
+
+	t.Run("single byte", func(t *testing.T) {
+		assert.Equal(t, "x", decodeUTF16LE([]byte("x")))
+	})
+
+	t.Run("UTF-16LE without BOM", func(t *testing.T) {
+		encoded := encodeUTF16LE("Hello\n")
+		result := decodeUTF16LE(encoded)
+		assert.Equal(t, "Hello\n", result)
+	})
+
+	t.Run("UTF-16LE with BOM", func(t *testing.T) {
+		bom := []byte{0xFF, 0xFE}
+		encoded := append(bom, encodeUTF16LE("Hello\n")...)
+		result := decodeUTF16LE(encoded)
+		assert.Equal(t, "Hello\n", result)
+	})
+
+	t.Run("real wsl.exe output simulation", func(t *testing.T) {
+		// Simulate wsl.exe --list --verbose output in UTF-16LE
+		raw := "  NAME                   STATE           VERSION\r\n" +
+			"* Debian                 Running         2\r\n" +
+			"  docker-desktop         Running         2\r\n" +
+			"  Alpine                 Stopped         2\r\n"
+		encoded := encodeUTF16LE(raw)
+
+		decoded := decodeUTF16LE(encoded)
+		assert.Equal(t, raw, decoded)
+
+		// Verify it parses correctly
+		distros, err := ParseListVerbose(decoded)
+		assert.NoError(t, err)
+		assert.Len(t, distros, 3)
+		assert.Equal(t, "Debian", distros[0].Name)
+		assert.True(t, distros[0].Default)
+		assert.Equal(t, "docker-desktop", distros[1].Name)
+		assert.Equal(t, "Alpine", distros[2].Name)
+		assert.Equal(t, StateStopped, distros[2].State)
 	})
 }
