@@ -273,8 +273,16 @@ func cmdAutoconfig(configFile string) {
 
 // cmdConfig sets a config value by dotted key path.
 func cmdConfig(configFile string, args []string) {
+	if len(args) == 0 {
+		path := configFile
+		if path == "" {
+			path = config.DefaultPath()
+		}
+		fmt.Println(path)
+		return
+	}
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: wslwatch --config <key> <value>")
+		fmt.Fprintln(os.Stderr, "usage: wslwatch --config [<key> <value>]")
 		os.Exit(1)
 	}
 	key, value := args[0], args[1]
@@ -470,6 +478,7 @@ Usage:
   wslwatch --install [--add-to-path] Install as Windows Service
   wslwatch --uninstall              Remove the Windows Service
   wslwatch --autoconfig             Generate config from installed distros
+  wslwatch --config                 Show config file path
   wslwatch --config <key> <value>   Set a config value
   wslwatch --status                 Show watchdog status
   wslwatch --pause <distro>         Pause monitoring a distro
