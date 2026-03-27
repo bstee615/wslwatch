@@ -89,7 +89,10 @@ func Install(copyBinary string, addToPath bool, serviceUser string) error {
 	var s *mgr.Service
 	if existing != nil {
 		// Service already registered — update its config in place.
+		// ServiceType must be set explicitly (zero value is invalid when
+		// changing ServiceStartName).
 		cfg := mgr.Config{
+			ServiceType:      windows.SERVICE_WIN32_OWN_PROCESS,
 			DisplayName:      DisplayName,
 			StartType:        mgr.StartAutomatic,
 			Description:      Description,
