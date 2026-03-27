@@ -12,11 +12,11 @@
 
   <!-- ============ ASCII ART (just the character) ============ -->
   <g font-family="'Cascadia Code','Consolas','Courier New',monospace" font-size="22" xml:space="preserve">
-    <text x="60" y="55"  fill="#e8d5a8">  ／\、</text>
-    <text x="44" y="85"  fill="#e8d5a8">（<tspan fill="#66ccff">ﾟ</tspan>､ <tspan fill="#66ccff">｡</tspan> ７</text>
-    <text x="60" y="115" fill="#e8d5a8">  |  ~ヽ</text>
-    <text x="60" y="145" fill="#e8d5a8">  じしf_, )ノ</text>
-    <text x="82" y="128" fill="#dd4444" font-size="14">♦♦♦</text>
+    <text x="60" y="55"  fill="#e8d5a8">        ／\、</text>
+    <text x="36" y="85"  fill="#e8d5a8">  （ﾟ､ ｡ ７</text>
+    <text x="60" y="115" fill="#e8d5a8">        |  ~ヽ\</text>
+    <text x="60" y="145" fill="#e8d5a8">        じしε_,)ノ</text>
+    <text x="84" y="128" fill="#dd4444" font-size="14">♦♦♦</text>
   </g>
 
   <!-- ============ TEXT ============ -->
