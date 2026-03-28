@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Pre-commit hook: mirrors the CI "Vet & Format" and "Lint" jobs.
+# Install with: bash scripts/install-hooks.sh
+
+set -euo pipefail
+
+PASS=0
+
+# ── go vet ──────────────────────────────────────────────────────────────────
+echo "Running go vet..."
+if ! go vet ./...; then
+  echo "go vet failed." >&2
+  PASS=1
+fi
+
+# ── gofmt ────────────────────────────────────────────────────────────────────
+echo "Checking formatting..."
+unformatted=$(gofmt -l .)
+if [ -n "$unformatted" ]; then
+  echo "The following files are not formatted (run: gofmt -w .):" >&2
+  echo "$unformatted" >&2
+  PASS=1
+fi
+
+# ── golangci-lint (optional) ─────────────────────────────────────────────────
+if command -v golangci-lint &>/dev/null; then
+  echo "Running golangci-lint..."
+  if ! golangci-lint run; then
+    echo "golangci-lint failed." >&2
+    PASS=1
+  fi
+else
+  echo "golangci-lint not found, skipping (install from https://golangci-lint.run/welcome/install/)"
+fi
+
+exit $PASS

@@ -153,6 +153,16 @@ $env:GOOS = "windows"; $env:GOARCH = "amd64"; $env:CGO_ENABLED = "0"
 go build -o wslwatch.exe ./cmd/wslwatch
 ```
 
+## Development
+
+### Git hooks
+
+A pre-commit hook runs `go vet`, `gofmt`, and `golangci-lint` (if installed) to catch issues before they reach CI.  Install it once after cloning:
+
+```bash
+bash scripts/install-hooks.sh
+```
+
 ## Testing
 
 ```powershell
