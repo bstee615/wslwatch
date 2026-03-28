@@ -131,16 +131,28 @@ func cmdInstall(configFile string, args []string) {
 		return
 	}
 
+	// Running elevated. Determine service user from current account.
+	serviceUser := `.\` + os.Getenv("USERNAME")
+
 	exe, err := os.Executable()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "cannot determine executable path: %v\n", err)
+		waitForEnter()
 		os.Exit(1)
 	}
 
-	if err := service.Install(exe, addToPath); err != nil {
+	if err := service.Install(exe, addToPath, serviceUser); err != nil {
 		fmt.Fprintf(os.Stderr, "install failed: %v\n", err)
+		waitForEnter()
 		os.Exit(1)
 	}
+	waitForEnter()
+}
+
+// waitForEnter pauses until the user presses Enter (keeps elevated window open).
+func waitForEnter() {
+	fmt.Println("\nPress Enter to close...")
+	_, _ = bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 // cmdUninstall removes the wslwatch service interactively.

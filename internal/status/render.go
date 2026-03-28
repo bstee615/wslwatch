@@ -96,6 +96,8 @@ func renderDistroLine(w io.Writer, d ipc.DistroData) {
 		fmt.Fprintf(w, "  %-20s %s\n", d.Name, gray("─ ignored"))
 	case strings.EqualFold(d.State, "stopped"):
 		fmt.Fprintf(w, "  %-20s %s\n", d.Name, red("✗ stopped"))
+	case strings.EqualFold(d.State, "starting"):
+		fmt.Fprintf(w, "  %-20s %s\n", d.Name, yellow("◌ starting"))
 	case strings.EqualFold(d.State, "healthy"):
 		line := fmt.Sprintf("  %-20s %s", d.Name, green("● healthy"))
 		if d.Uptime != "" {

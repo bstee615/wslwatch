@@ -56,20 +56,31 @@ func (ft *FailureTracker) pruneOldFailures() {
 }
 
 // RecordFailure records a failure at the current time.
-// If currently in backoff, the failure is ignored.
-func (ft *FailureTracker) RecordFailure() {
+// Returns true if the failure threshold has been reached (caller should restart).
+// If currently in backoff, the failure is ignored and false is returned.
+func (ft *FailureTracker) RecordFailure() bool {
 	if ft.InBackoff() {
-		return
+		return false
 	}
 
 	ft.failures = append(ft.failures, ft.now())
 	ft.allFailures = append(ft.allFailures, ft.now())
 	ft.pruneOldFailures()
 
-	if len(ft.failures) >= ft.threshold && ft.backoffDur > 0 {
-		ft.backoffUntil = ft.now().Add(ft.backoffDur)
+	if len(ft.failures) >= ft.threshold {
+		if ft.backoffDur > 0 {
+			ft.backoffUntil = ft.now().Add(ft.backoffDur)
+		}
 		ft.failures = nil
+		return true
 	}
+	return false
+}
+
+// ResetWindow clears threshold tracking but preserves display history.
+func (ft *FailureTracker) ResetWindow() {
+	ft.failures = nil
+	ft.backoffUntil = time.Time{}
 }
 
 // InBackoff returns true if the tracker is currently in backoff.

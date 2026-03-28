@@ -214,6 +214,8 @@ func (w *Watchdog) GetStatus() Status {
 			statusState = "paused"
 		case state.tracker.InBackoff():
 			statusState = "unhealthy"
+		case state.StartedAt.IsZero():
+			statusState = "starting"
 		default:
 			statusState = "healthy"
 		}
@@ -376,8 +378,17 @@ func (w *Watchdog) checkAll() {
 			continue
 		}
 
-		// Unhealthy: record failure and possibly restart.
-		state.tracker.RecordFailure()
+		// Unhealthy: record failure and only restart when threshold is reached.
+		thresholdReached := state.tracker.RecordFailure()
+
+		if !thresholdReached {
+			w.logger.Debug("distro unhealthy, waiting for failure threshold",
+				"distro", distro.Name,
+				"failures", state.tracker.FailureCount(),
+				"threshold", w.cfg.FailureThreshold,
+			)
+			continue
+		}
 
 		if distro.MaxRestarts > 0 && state.RestartCount >= distro.MaxRestarts {
 			w.mu.Lock()
@@ -395,6 +406,8 @@ func (w *Watchdog) checkAll() {
 		w.mu.Lock()
 		state.RestartCount++
 		w.mu.Unlock()
+
+		state.tracker.ResetWindow()
 	}
 }
 
@@ -437,11 +450,14 @@ func (w *Watchdog) queryDistroHealth(ctx context.Context, name string, distros [
 func (w *Watchdog) restartDistro(ctx context.Context, distro config.DistroConfig) {
 	w.logger.Info("restarting distro", "distro", distro.Name)
 
-	// Stop existing keep-alive before terminating.
+	// Stop existing keep-alive and reset uptime before terminating.
 	w.mu.Lock()
-	if state, ok := w.states[distro.Name]; ok && state.keepAlive != nil {
-		state.keepAlive.Stop()
-		state.keepAlive = nil
+	if state, ok := w.states[distro.Name]; ok {
+		if state.keepAlive != nil {
+			state.keepAlive.Stop()
+			state.keepAlive = nil
+		}
+		state.StartedAt = time.Time{}
 	}
 	w.mu.Unlock()
 

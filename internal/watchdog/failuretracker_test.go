@@ -29,10 +29,10 @@ func TestRecordFailure(t *testing.T) {
 	now, _ := newFakeClock(time.Now())
 	ft := NewFailureTracker(60*time.Second, 5, 10*time.Minute).WithClock(now)
 
-	ft.RecordFailure()
+	assert.False(t, ft.RecordFailure())
 	assert.Equal(t, 1, ft.FailureCount())
 
-	ft.RecordFailure()
+	assert.False(t, ft.RecordFailure())
 	assert.Equal(t, 2, ft.FailureCount())
 }
 
@@ -60,12 +60,12 @@ func TestBackoffEntry(t *testing.T) {
 	now, _ := newFakeClock(time.Now())
 	ft := NewFailureTracker(60*time.Second, 3, 10*time.Minute).WithClock(now)
 
-	ft.RecordFailure()
-	ft.RecordFailure()
+	assert.False(t, ft.RecordFailure())
+	assert.False(t, ft.RecordFailure())
 	assert.False(t, ft.InBackoff())
 
 	// Third failure crosses the threshold
-	ft.RecordFailure()
+	assert.True(t, ft.RecordFailure())
 	assert.True(t, ft.InBackoff())
 	assert.False(t, ft.BackoffUntil().IsZero())
 }
@@ -95,14 +95,30 @@ func TestNoBackoff(t *testing.T) {
 	ft := NewFailureTracker(60*time.Second, 3, 0).WithClock(now)
 
 	// Exceed threshold with backoffDur == 0; should never enter backoff
-	ft.RecordFailure()
-	ft.RecordFailure()
-	ft.RecordFailure()
-	ft.RecordFailure()
-	ft.RecordFailure()
+	// but RecordFailure should return true when threshold is reached
+	assert.False(t, ft.RecordFailure())
+	assert.False(t, ft.RecordFailure())
+	assert.True(t, ft.RecordFailure()) // threshold reached
 
 	assert.False(t, ft.InBackoff())
-	assert.Equal(t, 5, ft.FailureCount())
+	assert.Equal(t, 0, ft.FailureCount()) // cleared after threshold
+}
+
+func TestResetWindow(t *testing.T) {
+	now, _ := newFakeClock(time.Now())
+	ft := NewFailureTracker(60*time.Second, 3, 10*time.Minute).WithClock(now)
+
+	// Record some failures and trigger backoff
+	ft.RecordFailure()
+	ft.RecordFailure()
+	ft.RecordFailure()
+	assert.True(t, ft.InBackoff())
+
+	// ResetWindow clears threshold tracking but keeps display history
+	ft.ResetWindow()
+	assert.False(t, ft.InBackoff())
+	assert.Equal(t, 0, ft.FailureCount())
+	assert.True(t, len(ft.FailureTimes()) > 0, "display history should be preserved")
 }
 
 func TestReset(t *testing.T) {

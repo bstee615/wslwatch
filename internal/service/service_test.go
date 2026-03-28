@@ -11,7 +11,7 @@ import (
 )
 
 func TestInstallReturnsErrorOnNonWindows(t *testing.T) {
-	err := service.Install("", false)
+	err := service.Install("", false, "")
 	assert.Error(t, err)
 }
 

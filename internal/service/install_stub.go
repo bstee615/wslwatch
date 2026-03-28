@@ -11,7 +11,7 @@ const (
 	InstallDir  = "wslwatch"
 )
 
-func Install(copyBinary string, addToPath bool) error {
+func Install(copyBinary string, addToPath bool, serviceUser string) error {
 	return errors.New("service installation is only supported on Windows")
 }
 
