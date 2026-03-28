@@ -10,9 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
-
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -196,10 +195,10 @@ func readPassword() (string, error) {
 
 // LSA API types and procedures for granting user rights.
 var (
-	modAdvapi32              = syscall.NewLazyDLL("advapi32.dll")
-	procLsaOpenPolicy        = modAdvapi32.NewProc("LsaOpenPolicy")
-	procLsaAddAccountRights  = modAdvapi32.NewProc("LsaAddAccountRights")
-	procLsaClose             = modAdvapi32.NewProc("LsaClose")
+	modAdvapi32               = syscall.NewLazyDLL("advapi32.dll")
+	procLsaOpenPolicy         = modAdvapi32.NewProc("LsaOpenPolicy")
+	procLsaAddAccountRights   = modAdvapi32.NewProc("LsaAddAccountRights")
+	procLsaClose              = modAdvapi32.NewProc("LsaClose")
 	procLsaNtStatusToWinError = modAdvapi32.NewProc("LsaNtStatusToWinError")
 )
 

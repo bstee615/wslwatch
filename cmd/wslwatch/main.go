@@ -152,7 +152,7 @@ func cmdInstall(configFile string, args []string) {
 // waitForEnter pauses until the user presses Enter (keeps elevated window open).
 func waitForEnter() {
 	fmt.Println("\nPress Enter to close...")
-	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	_, _ = bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 // cmdUninstall removes the wslwatch service interactively.
