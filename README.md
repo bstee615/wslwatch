@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="wslwatch logo" width="820">
+  <img src="assets/logo.png" alt="wslwatch logo" width="820">
 </p>
 
 <h1 align="center">wslwatch</h1>
