@@ -509,5 +509,5 @@ const spikeASCII = `
   |  ~ヽ\
   じしε_,)ノ
 
-  Spike says: WOOF! Watching your distros.
+  Bark bark! Spike will watch over your distros.
 `
