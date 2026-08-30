@@ -10,13 +10,12 @@
   <!-- Background -->
   <rect width="820" height="200" rx="16" fill="url(#bg)"/>
 
-  <!-- ASCII dog; one text element per line keeps spacing stable in SVG renderers. -->
-  <g font-family="'Cascadia Code','Consolas','Courier New',monospace" font-size="24" font-weight="bold" fill="#e8d5a8">
-    <text x="58" y="42">/ \__</text>
-    <text x="30" y="69">(    @\___</text>
-    <text x="43" y="96">/         O</text>
-    <text x="30" y="123">/   (_____/</text>
-    <text x="30" y="150">/_____/   U</text>
+  <!-- Keep Spike in a CJK monospace font so the terminal art retains its shape. -->
+  <g font-family="'Noto Sans Mono CJK JP','MS Gothic','Yu Gothic',monospace" font-size="26" fill="#e8d5a8" xml:space="preserve">
+    <text x="30" y="50">  ／\、</text>
+    <text x="30" y="80">（ﾟ､ ｡ ７</text>
+    <text x="30" y="110">  |  ~ヽ\</text>
+    <text x="30" y="140">  じしε_,)ノ</text>
   </g>
 
   <!-- ============ TEXT ============ -->

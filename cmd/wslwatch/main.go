@@ -504,11 +504,10 @@ Global flags:
 
 // spikeASCII is the fallback ASCII art when assets/spike.txt is not found.
 const spikeASCII = `
-   / \__
-  (    @\___
-  /         O
- /   (_____/
-/_____/   U
+  ／\、
+（ﾟ､ ｡ ７
+  |  ~ヽ\
+  じしε_,)ノ
 
-  Spike says: WOOF! Watching your distros.
+  Bark bark! Spike will watch over your distros.
 `
