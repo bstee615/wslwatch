@@ -1,7 +1,3 @@
-  ██████████████████
-  ██  wslwatch  ████
-  ██  BARK BARK ████
-  ██████████████████
 
   Bark bark! Spike will watch over your distros.
 
